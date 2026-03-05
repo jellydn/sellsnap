@@ -1,7 +1,7 @@
-import { prismaAdapter } from "better-auth/adapters/prisma";
 import cors from "@fastify/cors";
 import { PrismaClient } from "@prisma/client";
 import { betterAuth } from "better-auth";
+import { prismaAdapter } from "better-auth/adapters/prisma";
 import Fastify from "fastify";
 
 const server = Fastify();

@@ -67,7 +67,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "Use Tailwind CSS for styling. Keep forms simple and minimal."
     },
     {
@@ -85,7 +85,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "Use better-auth's useSession hook for auth state. Apply protected route wrapper to /dashboard/* routes."
     },
     {

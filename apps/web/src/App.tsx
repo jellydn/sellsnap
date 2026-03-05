@@ -1,6 +1,8 @@
 import { Route, Routes } from "react-router-dom";
-import { SignUp } from "./pages/SignUp";
+import { AppLayout } from "./components/AppLayout";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 import { SignIn } from "./pages/SignIn";
+import { SignUp } from "./pages/SignUp";
 
 function Home() {
   return (
@@ -11,12 +13,31 @@ function Home() {
   );
 }
 
+function Dashboard() {
+  return (
+    <div style={{ padding: "2rem" }}>
+      <h1>Dashboard</h1>
+      <p>Your products will appear here.</p>
+    </div>
+  );
+}
+
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/sign-up" element={<SignUp />} />
-      <Route path="/sign-in" element={<SignIn />} />
-    </Routes>
+    <AppLayout>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/sign-up" element={<SignUp />} />
+        <Route path="/sign-in" element={<SignIn />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </AppLayout>
   );
 }

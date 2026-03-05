@@ -71,3 +71,49 @@
   - Prisma adapter uses prismaAdapter function from better-auth/adapters/prisma
   - Clean install of node_modules helps resolve dependency conflicts
 ---
+
+## 2026-03-05 12:00 - US-004
+[Session: ]
+- Installed better-auth in web app
+- Created auth client using createAuthClient from better-auth/client
+- Created SignUp page at /sign-up with name, email, password fields
+- Created SignIn page at /sign-in with email, password fields
+- Auth client configured with baseURL pointing to server (http://localhost:3000)
+- Sign-up and sign-in forms submit to better-auth API and redirect to /dashboard
+- Files changed:
+  - apps/web/src/lib/auth.ts (new - auth client)
+  - apps/web/src/pages/SignUp.tsx (new)
+  - apps/web/src/pages/SignIn.tsx (new)
+  - apps/web/src/App.tsx (updated with routes)
+- **Learnings for future iterations:**
+  - Use better-auth/client (not better-auth/react) for the auth client
+  - Use authClient.signUp.email() and authClient.signIn.email() for email/password auth
+  - Client methods are inferred from the server configuration
+---
+
+## 2026-03-05 12:30 - US-005
+[Session: ]
+- Implemented App layout component with header showing brand, auth state
+- Added auth-aware header with user name and Sign Out button when authenticated
+- Shows Sign In link when not authenticated
+- Created ProtectedRoute wrapper that redirects to /sign-in if unauthenticated
+- Added Dashboard page at /dashboard (protected)
+- Updated auth client to use better-auth/react for React hooks (useSession)
+- Fixed a11y issues in SignIn/SignUp forms (added htmlFor/id to labels)
+- All typechecks pass
+- Verified dev servers run correctly (web on 5175, server on 3000)
+- Files changed:
+  - apps/web/src/lib/auth.ts (changed import to better-auth/react)
+  - apps/web/src/components/AppLayout.tsx (new - layout with header)
+  - apps/web/src/components/ProtectedRoute.tsx (new - route protection)
+  - apps/web/src/App.tsx (updated with layout and dashboard route)
+  - apps/web/src/pages/SignIn.tsx (fixed label accessibility)
+  - apps/web/src/pages/SignUp.tsx (fixed label accessibility)
+  - apps/web/package.json (added @better-fetch/fetch)
+  - scripts/ralph/prd.json (marked US-005 as passes: true)
+- **Learnings for future iterations:**
+  - Use better-auth/react (not better-auth/client) for React hooks like useSession
+  - useSession returns data, isPending, error, refetch - use data?.user for user info
+  - biome lint requires htmlFor on labels - need to add id to inputs
+  - Dev server ports may change if default ports are in use (5173->5175)
+---

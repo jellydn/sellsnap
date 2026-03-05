@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@better-fetch/fetch": "^1.1.21",
     "better-auth": "1.5.3",
     "react": "^19.2.4",
     "react-dom": "^18.3.1",

@@ -1,6 +1,6 @@
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { authClient } from "../lib/auth";
-import { useNavigate, Link } from "react-router-dom";
 
 export function SignUp() {
   const [email, setEmail] = useState("");
@@ -30,47 +30,139 @@ export function SignUp() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#f9fafb" }}>
-      <div style={{ maxWidth: "400px", width: "100%", padding: "2rem", backgroundColor: "white", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: "bold", marginBottom: "1.5rem", textAlign: "center" }}>Sign Up</h1>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#f9fafb",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "400px",
+          width: "100%",
+          padding: "2rem",
+          backgroundColor: "white",
+          borderRadius: "8px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+        }}
+      >
+        <h1
+          style={{
+            fontSize: "1.5rem",
+            fontWeight: "bold",
+            marginBottom: "1.5rem",
+            textAlign: "center",
+          }}
+        >
+          Sign Up
+        </h1>
         {error && (
-          <div style={{ marginBottom: "1rem", padding: "0.75rem", backgroundColor: "#fef2f2", color: "#dc2626", borderRadius: "4px" }}>{error}</div>
+          <div
+            style={{
+              marginBottom: "1rem",
+              padding: "0.75rem",
+              backgroundColor: "#fef2f2",
+              color: "#dc2626",
+              borderRadius: "4px",
+            }}
+          >
+            {error}
+          </div>
         )}
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: "1rem" }}>
-            <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "500", marginBottom: "0.25rem" }}>Name</label>
+            <label
+              htmlFor="name"
+              style={{
+                display: "block",
+                fontSize: "0.875rem",
+                fontWeight: "500",
+                marginBottom: "0.25rem",
+              }}
+            >
+              Name
+            </label>
             <input
+              id="name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              style={{ width: "100%", padding: "0.5rem", border: "1px solid #d1d5db", borderRadius: "4px" }}
+              style={{
+                width: "100%",
+                padding: "0.5rem",
+                border: "1px solid #d1d5db",
+                borderRadius: "4px",
+              }}
               required
             />
           </div>
           <div style={{ marginBottom: "1rem" }}>
-            <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "500", marginBottom: "0.25rem" }}>Email</label>
+            <label
+              htmlFor="email"
+              style={{
+                display: "block",
+                fontSize: "0.875rem",
+                fontWeight: "500",
+                marginBottom: "0.25rem",
+              }}
+            >
+              Email
+            </label>
             <input
+              id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              style={{ width: "100%", padding: "0.5rem", border: "1px solid #d1d5db", borderRadius: "4px" }}
+              style={{
+                width: "100%",
+                padding: "0.5rem",
+                border: "1px solid #d1d5db",
+                borderRadius: "4px",
+              }}
               required
             />
           </div>
           <div style={{ marginBottom: "1.5rem" }}>
-            <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "500", marginBottom: "0.25rem" }}>Password</label>
+            <label
+              htmlFor="password"
+              style={{
+                display: "block",
+                fontSize: "0.875rem",
+                fontWeight: "500",
+                marginBottom: "0.25rem",
+              }}
+            >
+              Password
+            </label>
             <input
+              id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              style={{ width: "100%", padding: "0.5rem", border: "1px solid #d1d5db", borderRadius: "4px" }}
+              style={{
+                width: "100%",
+                padding: "0.5rem",
+                border: "1px solid #d1d5db",
+                borderRadius: "4px",
+              }}
               required
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            style={{ width: "100%", backgroundColor: loading ? "#9ca3af" : "#2563eb", color: "white", padding: "0.5rem", borderRadius: "4px", border: "none", cursor: loading ? "not-allowed" : "pointer" }}
+            style={{
+              width: "100%",
+              backgroundColor: loading ? "#9ca3af" : "#2563eb",
+              color: "white",
+              padding: "0.5rem",
+              borderRadius: "4px",
+              border: "none",
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
           >
             {loading ? "Signing up..." : "Sign Up"}
           </button>
