@@ -291,3 +291,20 @@
   - stripe SDK provides its own TypeScript types - no need for @types/stripe
   - Use Number.isNaN instead of isNaN for type safety
 ---
+
+## 2026-03-05 17:00 - US-014
+[Session: ]
+- Implemented POST /api/webhooks/stripe endpoint
+- Handles checkout.session.completed event from Stripe
+- Added raw body parser for webhook signature verification
+- Verifies webhook signature using STRIPE_WEBHOOK_SECRET from .env
+- Creates Purchase record with status 'completed', stripePaymentIntentId
+- Generates unique downloadToken (UUID) and downloadExpiresAt (24 hours)
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/src/index.ts (added webhook endpoint and raw body parser)
+  - scripts/ralph/prd.json (marked US-014 as passes: true)
+- **Learnings for future iterations:**
+  - Need raw body for Stripe webhook signature verification
+  - Use addContentTypeParser with parseAs: "string" to get raw body
+---
