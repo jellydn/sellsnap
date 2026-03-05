@@ -3,6 +3,7 @@ import { AppLayout } from "./components/AppLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Dashboard } from "./pages/Dashboard";
 import { ProductCreate } from "./pages/ProductCreate";
+import { ProductEdit } from "./pages/ProductEdit";
 import { SignIn } from "./pages/SignIn";
 import { SignUp } from "./pages/SignUp";
 
@@ -35,6 +36,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <ProductCreate />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/products/:id"
+          element={
+            <ProtectedRoute>
+              <ProductEdit />
             </ProtectedRoute>
           }
         />

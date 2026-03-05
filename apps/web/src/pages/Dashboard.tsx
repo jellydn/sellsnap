@@ -8,12 +8,16 @@ function formatPrice(cents: number): string {
 
 function ProductCard({ product }: { product: Product }) {
   return (
-    <div
+    <Link
+      to={`/dashboard/products/${product.id}`}
       style={{
         border: "1px solid #e5e7eb",
         borderRadius: "8px",
         padding: "1rem",
         backgroundColor: "white",
+        textDecoration: "none",
+        color: "inherit",
+        display: "block",
       }}
     >
       {product.coverImageUrl && (
@@ -48,7 +52,7 @@ function ProductCard({ product }: { product: Product }) {
         <span>{product.viewCount} views</span>
         <span>{product.purchaseCount} purchases</span>
       </div>
-    </div>
+    </Link>
   );
 }
 
