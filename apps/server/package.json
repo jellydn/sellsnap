@@ -10,10 +10,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@fastify/cors": "^10.0.1",
+    "@auth/prisma-adapter": "^2.11.1",
+    "@better-auth/prisma-adapter": "^1.5.3",
+    "@fastify/cors": "^11.2.0",
+    "@prisma/client": "6.19.2",
+    "better-auth": "^1.5.3",
     "fastify": "^5.2.1"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.5",
     "@types/node": "^25.3.3",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"

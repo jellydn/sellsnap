@@ -20,18 +20,18 @@ Tech stack: React 18, Vite, TypeScript (strict), Tailwind CSS, Prisma, PostgreSQ
 
 ## Build / Development Commands
 
-**Note:** Use `bun` as the package manager instead of `pnpm` for better compatibility.
+This project uses `pnpm` as the package manager. You can also use the `just` CLI for shortcuts.
 
-### Root Commands
+### Using pnpm
 
 ```bash
-# Install dependencies (from root, then each app)
-bun install && cd apps/web && bun install && cd ../server && bun install && cd ../../packages/db && bun install
+# Install dependencies
+pnpm install
 
-# Or install each workspace individually:
-cd apps/web && bun install
-cd apps/server && bun install
-cd packages/db && bun install
+# Or per workspace:
+cd apps/web && pnpm install
+cd apps/server && pnpm install
+cd packages/db && pnpm install
 
 # Start all dev servers (web + server)
 pnpm dev
@@ -42,40 +42,59 @@ pnpm typecheck
 # Type check specific package
 pnpm typecheck:web
 pnpm typecheck:server
+
+# Build web app
+cd apps/web && pnpm build
 ```
 
-### Web App (apps/web)
+### Using just (recommended shortcuts)
 
 ```bash
-# Start dev server, build, preview, typecheck
-pnpm dev
-pnpm build
-pnpm preview
-pnpm typecheck
-```
+# Install, dev, typecheck
+just install
+just dev
+just typecheck
+just typecheck-web
+just typecheck-server
 
-### Server (apps/server)
+# Build web
+just build-web
 
-```bash
+# Lint and format
+just lint
+
+# Run tests
+just test              # Run all tests
+just test-watch        # Watch mode
+just test-file <file>  # Run single test file
+
 # Prisma commands
-pnpm prisma migrate dev
-pnpm prisma generate
-pnpm prisma db push
+just prisma-migrate <name>
+just prisma-generate
+just prisma-push
 ```
 
 ### Running a Single Test
 
-**Note:** This project does not currently have a test framework. To add tests:
+**Option 1: Using just (recommended)**
 
 ```bash
-cd apps/web
-pnpm add -D vitest @testing-library/react @testing-library/jest-dom jsdom
+just test-file src/components/__tests__/MyComponent.test.tsx
+```
 
-# Run single test file
-pnpm vitest run src/components/__tests__/MyComponent.test.tsx
+**Option 2: Using pnpm/vitest directly**
 
-# Run tests in watch mode
-pnpm vitest
+```bash
+cd apps/web && pnpm vitest run src/components/__tests__/MyComponent.test.tsx
+
+# Watch mode
+cd apps/web && pnpm vitest src/components/__tests__/MyComponent.test.tsx
+```
+
+**Note:** This project does not have a test framework configured. To add tests:
+
+```bash
+cd apps/web && pnpm add -D vitest @testing-library/react @testing-library/jest-dom jsdom
 ```
 
 ---
@@ -95,7 +114,6 @@ pnpm vitest
 - Use named exports over default
 
 ```typescript
-// Good
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "../utils/format";
@@ -115,13 +133,6 @@ import { type User } from "@/types/user";
 - Use `function` declarations for components
 - Extract custom hooks for reusable logic
 
-```typescript
-export function ProductCard({ product }: ProductCardProps) {
-  const [isLoading, setIsLoading] = useState(false)
-  return <div className="card">...</div>
-}
-```
-
 ### Error Handling
 
 - Use try/catch with async/await
@@ -134,23 +145,13 @@ type Result<T> = { success: true; data: T } | { success: false; error: string };
 ### Database / Prisma
 
 - Use Prisma client for all database operations
-- Name migrations descriptively: `pnpm prisma migrate dev --name add_product_slug`
+- Name migrations descriptively: `just prisma-migrate add_product_slug`
 - Use transactions for multi-step operations
 
 ### API Design (Fastify)
 
 - Use typed request/response schemas
 - Return consistent response format
-
-```typescript
-export async function productRoutes(fastify: FastifyInstance) {
-  fastify.get<{ Params: { id: string } }>('/products/:id', { schema: {...} }, async (request) => {
-    const product = await prisma.product.findUnique({ where: { id: request.params.id } })
-    if (!product) throw fastify.httpNotFound()
-    return product
-  })
-}
-```
 
 ### CSS / Styling
 
@@ -162,16 +163,19 @@ export async function productRoutes(fastify: FastifyInstance) {
 
 ## Linting & Formatting
 
-Use Biome (configured in `apps/web/biome.json`):
+Use Biome (configured in `apps/web/biome.json` and `apps/server/biome.json`):
 
 ```bash
-# Check and format
-cd apps/web && pnpm biome check --write .
+# Run on web
+cd apps/web && bun x biome check --write .
+
+# Run on server
+cd apps/server && bun x biome check --write .
+
+# Or: just lint
 ```
 
-Or with just: `just lint`
-
-Pre-commit hooks run automatically on commit (via prek):
+Pre-commit hooks run automatically on commit (via prek, uses bun):
 
 ```bash
 prek run --all-files

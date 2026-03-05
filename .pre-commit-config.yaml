@@ -2,9 +2,8 @@ repos:
   - repo: local
     hooks:
       - id: biome
-        name: biome
-        entry: bun x biome check --write .
+        name: biome (web & server)
+        entry: bash -c "cd apps/web && bun x biome check --write . && cd ../../apps/server && bun x biome check --write ."
         language: system
         files: \.(ts|tsx|js|jsx)$
         pass_filenames: false
-        args: ["apps/web/src"]

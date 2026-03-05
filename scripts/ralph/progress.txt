@@ -49,29 +49,25 @@
   - Prisma migration requires DATABASE_URL in packages/db/.env
   - Use docker run with -d flag to run in background
 ---
+
+## 2026-03-05 11:30 - US-003
 [Session: ]
-- Implemented monorepo setup with pnpm workspaces
-- Created apps/web with React/Vite and react-router-dom
-- Created apps/server with Fastify and @fastify/cors
-- Created packages/db with Prisma schema (PostgreSQL datasource)
-- Created packages/tsconfig with shared TypeScript config
-- Configured Vite proxy to forward /api to server
-- Root dev script uses pnpm --filter to run both servers concurrently
-- All typechecks pass for web, server, and db packages
-- Verified health endpoint at /api/health returns { status: 'ok' }
-- Verified web app serves hello page at localhost:5173
+- Installed better-auth and @better-auth/prisma-adapter in server
+- Configured better-auth with Prisma adapter for PostgreSQL
+- Enabled email/password authentication
+- Mounted better-auth handler on /api/auth/* routes
+- Added baseURL config for proper redirect handling
+- Created .env with BETTER_AUTH_SECRET
+- All typechecks pass
+- Server runs at http://localhost:3000 with better-auth endpoints
 - Files changed:
-  - package.json (root)
-  - pnpm-workspace.yaml
-  - packages/tsconfig/base.json
-  - packages/tsconfig.json
-  - packages/db/package.json, tsconfig.json, prisma/schema.prisma, src/index.ts
-  - apps/web/package.json, tsconfig.json, vite.config.ts, index.html, src/main.tsx, src/App.tsx
-  - apps/server/package.json, tsconfig.json, src/index.ts, .env.example
-  - AGENTS.md (updated)
+  - apps/server/package.json (added better-auth, @better-auth/prisma-adapter, @prisma/client)
+  - apps/server/src/index.ts (added better-auth setup and auth route)
+  - apps/server/.env (added BETTER_AUTH_SECRET)
 - **Learnings for future iterations:**
-  - pnpm workspace requires packageManager field matching - bun works better for development
-  - Vite proxy configuration needs changeOrigin: true for CORS
-  - @fastify/cors with origin: true allows all origins during dev
-  - Remove project references from tsconfig when using extends for base config
+  - Use @better-auth/prisma-adapter (not @auth/prisma-adapter) with better-auth 1.5.3
+  - better-auth requires @prisma/client 6.19.2 to match Prisma schema version
+  - baseURL must be set or BETTER_AUTH_URL env var for redirects to work
+  - Prisma adapter uses prismaAdapter function from better-auth/adapters/prisma
+  - Clean install of node_modules helps resolve dependency conflicts
 ---
