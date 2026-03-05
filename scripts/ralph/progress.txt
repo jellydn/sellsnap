@@ -379,6 +379,21 @@
   - apps/web/src/App.tsx (added settings route)
   - apps/web/src/components/AppLayout.tsx (added settings link)
   - scripts/ralph/prd.json (marked US-018 as passes: true)
+ - **Learnings for future iterations:**
+   - Slug change affects public creator profile URL
+ ---
+
+## 2026-03-05 21:50 - Findings Fix (US-015 Bug & Warning)
+[Session: ]
+- Fixed purchase lookup bug: GET /api/purchases/by-session/:sessionId now queries stripeSessionId instead of stripePaymentIntentId
+- Fixed rate limiting: moved from global registration to route-level config on /api/download/:token only
+- Updated PRD findings to remove resolved bug and warning
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/src/index.ts (fixed purchase lookup and scoped rate limiting)
+  - scripts/ralph/prd.json (updated findings)
 - **Learnings for future iterations:**
-  - Slug change affects public creator profile URL
+  - stripeSessionId (cs_xxx) is different from stripePaymentIntentId (pi_xxx)
+  - Use @fastify/rate-limit route-level config to scope rate limiting to specific endpoints
+  - stripeSessionId was already being stored in webhook but not used for lookup
 ---
