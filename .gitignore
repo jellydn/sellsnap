@@ -44,3 +44,4 @@ apps/web/dist/
 # Temp
 tmp/
 temp/
+.claude/settings.local.json
