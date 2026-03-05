@@ -6,16 +6,16 @@ SellSnap is a lightweight platform that lets creators upload a digital file, set
 
 ## Tech Stack
 
-| Layer       | Technology                          |
-| ----------- | ----------------------------------- |
-| Frontend    | React (Vite) + React Router         |
-| Backend     | Node.js / Fastify                   |
-| Database    | PostgreSQL + Prisma ORM             |
-| Auth        | better-auth (email/password)        |
-| Payments    | Stripe Checkout                     |
-| Storage     | Local filesystem (S3/R2 later)      |
-| Styling     | Tailwind CSS                        |
-| Monorepo    | pnpm workspaces                     |
+| Layer    | Technology                     |
+| -------- | ------------------------------ |
+| Frontend | React (Vite) + React Router    |
+| Backend  | Node.js / Fastify              |
+| Database | PostgreSQL + Prisma ORM        |
+| Auth     | better-auth (email/password)   |
+| Payments | Stripe Checkout                |
+| Storage  | Local filesystem (S3/R2 later) |
+| Styling  | Tailwind CSS                   |
+| Monorepo | pnpm workspaces                |
 
 ## Project Structure
 
@@ -42,20 +42,38 @@ packages/
 pnpm install
 
 # Set up environment variables
-cp apps/server/.env.example apps/server/.env
+cp .env.example .env
+# Edit .env with your database credentials
 
 # Run database migrations
-pnpm --filter server prisma migrate dev
+pnpm db:migrate
+# Or: just prisma-migrate add_initial_schema
 
 # Start development servers
 pnpm dev
+# Or: just dev
+```
+
+### Using just (recommended)
+
+```bash
+just install           # Install dependencies
+just dev               # Start all dev servers
+just typecheck         # Type check all packages
+just build-web         # Build web app
+just lint              # Lint and format
+just test              # Run tests
+
+# Database commands
+just prisma-migrate <name>   # Create and run migration
+just prisma-push              # Push schema to database
 ```
 
 ### Environment Variables
 
 ```env
 DATABASE_URL=postgresql://user:password@localhost:5432/sellsnap
-BETTER_AUTH_SECRET=your-secret
+BETTER_AUTH_SECRET=your-secret-at-least-32-chars
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 FRONTEND_URL=http://localhost:5173

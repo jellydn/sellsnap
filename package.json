@@ -6,7 +6,10 @@
     "dev": "pnpm --filter web dev & pnpm --filter server dev",
     "typecheck": "pnpm -r typecheck",
     "typecheck:web": "pnpm --filter web typecheck",
-    "typecheck:server": "pnpm --filter server typecheck"
+    "typecheck:server": "pnpm --filter server typecheck",
+    "db:generate": "dotenv -f .env run -- pnpm --filter db db:generate",
+    "db:push": "dotenv -f .env run -- pnpm --filter db db:push",
+    "db:migrate": "dotenv -f .env run -- pnpm --filter db db:migrate"
   },
   "devDependencies": {
     "typescript": "^5.7.2"

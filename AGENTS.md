@@ -154,7 +154,7 @@ test("should increment counter when button is clicked", () => {
 
 ### CSS / Styling
 
-- Use Tailwind CSS (v3 in web)
+- Use Tailwind CSS v4
 - Keep custom CSS minimal
 - Use utility classes
 
