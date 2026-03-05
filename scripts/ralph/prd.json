@@ -1,1 +1,322 @@
-{}
+{
+  "project": "SellSnap",
+  "branchName": "ralph/sellsnap-mvp",
+  "description": "SellSnap MVP — Mini store for digital products. Creators upload a file, set a price, share a link, and sell instantly.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Monorepo & project setup",
+      "description": "As a developer, I need a monorepo with shared config so frontend and backend can be developed together.",
+      "acceptanceCriteria": [
+        "pnpm workspace with `apps/web` (React/Vite) and `apps/server` (Fastify) packages",
+        "Shared TypeScript config in `packages/tsconfig`",
+        "Prisma schema in `packages/db` with PostgreSQL datasource",
+        "Root `dev` script starts both web and server concurrently",
+        "Web app renders a hello page at http://localhost:5173",
+        "Server responds to GET /api/health with { status: 'ok' }",
+        "Typecheck passes across all packages"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Use pnpm workspaces. Fastify for server with @fastify/cors configured to allow Vite dev origin. Vite proxy /api to server."
+    },
+    {
+      "id": "US-002",
+      "title": "Database schema — User, Product, Purchase tables",
+      "description": "As a developer, I need the database schema to support users, products, and purchases.",
+      "acceptanceCriteria": [
+        "User table: id (cuid), name, email (unique), slug (unique), avatarUrl (optional), createdAt",
+        "Product table: id (cuid), title, slug (unique), description (text), price (Int, cents), coverImageUrl (optional), filePath, previewContent (optional), published (Boolean, default false), viewCount (Int, default 0), creatorId (FK to User), createdAt, updatedAt",
+        "Purchase table: id (cuid), productId (FK to Product), customerEmail, customerName (optional), stripePaymentIntentId, amount (Int, cents), status (String: pending/completed/failed), downloadToken (unique), downloadExpiresAt (DateTime), createdAt",
+        "Prisma migration runs successfully against a PostgreSQL database",
+        "Prisma client generates without errors",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Schema in packages/db/prisma/schema.prisma. Leave better-auth tables for the auth story — better-auth auto-generates its own tables."
+    },
+    {
+      "id": "US-003",
+      "title": "better-auth backend setup",
+      "description": "As a developer, I need better-auth configured on the Fastify server with Prisma adapter and email/password enabled.",
+      "acceptanceCriteria": [
+        "Install better-auth and configure with Prisma adapter in apps/server",
+        "Email/password authentication enabled",
+        "better-auth handler mounted on Fastify (handles /api/auth/* routes)",
+        "Auth tables are auto-managed by better-auth (session, account, verification)",
+        "BETTER_AUTH_SECRET loaded from .env",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Use better-auth's toNodeHandler or Fastify adapter. Mount under /api/auth/*. Create .env.example with BETTER_AUTH_SECRET and DATABASE_URL placeholders."
+    },
+    {
+      "id": "US-004",
+      "title": "Auth UI — Sign up and sign in pages",
+      "description": "As a creator, I want sign-up and sign-in pages so I can create an account and log in.",
+      "acceptanceCriteria": [
+        "Auth client initialized using createAuthClient from better-auth/react with baseURL pointing to server",
+        "Sign-up page at /sign-up with name, email, password fields",
+        "Sign-up auto-generates a slug from the user's name (kebab-case)",
+        "Sign-in page at /sign-in with email and password fields",
+        "After successful sign-up or sign-in, redirect to /dashboard",
+        "Form shows error messages on failure",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Use Tailwind CSS for styling. Keep forms simple and minimal."
+    },
+    {
+      "id": "US-005",
+      "title": "App layout with auth-aware header",
+      "description": "As a user, I want a header that shows my name and sign-out button when logged in, or sign-in link when not.",
+      "acceptanceCriteria": [
+        "App layout component wraps all pages with a header",
+        "Header shows 'SellSnap' brand/logo linking to /",
+        "When authenticated: shows user name and Sign Out button",
+        "Sign-out button clears session and redirects to /sign-in",
+        "When not authenticated: shows Sign In link",
+        "Protected route wrapper that redirects to /sign-in if unauthenticated",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Use better-auth's useSession hook for auth state. Apply protected route wrapper to /dashboard/* routes."
+    },
+    {
+      "id": "US-006",
+      "title": "Creator dashboard — product list",
+      "description": "As a creator, I want a dashboard showing all my products so I can manage them.",
+      "acceptanceCriteria": [
+        "Dashboard page at /dashboard (protected route)",
+        "Fastify route GET /api/products returns all products for the authenticated user",
+        "Each product card shows: title, price (formatted as dollars), published status badge, view count, purchase count",
+        "Create Product button links to /dashboard/products/new",
+        "Empty state message when no products exist",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Purchase count is derived from counting related Purchase records with status 'completed'."
+    },
+    {
+      "id": "US-007",
+      "title": "Product creation — backend API with file upload",
+      "description": "As a developer, I need API endpoints for creating products with file uploads.",
+      "acceptanceCriteria": [
+        "Install and configure @fastify/multipart for file uploads",
+        "Fastify route POST /api/products accepts multipart form data",
+        "Fields: title, description, price, previewContent (optional), coverImage (file), productFile (file)",
+        "Slug auto-generated from title (kebab-case), ensure uniqueness by appending random suffix if needed",
+        "Cover image saved to uploads/images/ directory",
+        "Product file saved to uploads/files/ directory",
+        "Product created with published: false",
+        "Returns created product as JSON",
+        "uploads/files/ directory is NOT served by @fastify/static",
+        "uploads/images/ directory IS served by @fastify/static at /uploads/images/*",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Use @fastify/static to serve uploads/images/ only. Price arrives as dollars string, convert to cents integer."
+    },
+    {
+      "id": "US-008",
+      "title": "Product creation — frontend form",
+      "description": "As a creator, I want a form to create a new product with file uploads.",
+      "acceptanceCriteria": [
+        "Product creation page at /dashboard/products/new (protected route)",
+        "Form fields: title (text), description (textarea), price (number input, in dollars), cover image (file input), digital file (file input), preview content (textarea, optional)",
+        "Submits as multipart/form-data to POST /api/products",
+        "Shows loading state during submission",
+        "On success, redirects to /dashboard/products/:id (edit page)",
+        "On error, shows error message",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Use FormData for multipart submission. Keep the form simple with Tailwind styling."
+    },
+    {
+      "id": "US-009",
+      "title": "Product edit & publish — backend API",
+      "description": "As a developer, I need API endpoints for updating and publishing products.",
+      "acceptanceCriteria": [
+        "Fastify route GET /api/products/:id returns product (only if owned by authenticated user)",
+        "Fastify route PUT /api/products/:id updates product fields (multipart form data)",
+        "Can update: title, description, price, slug, previewContent, coverImage (file), productFile (file)",
+        "Slug update validates uniqueness",
+        "Fastify route PATCH /api/products/:id/publish toggles the published field",
+        "Only the product owner can access these endpoints",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "File fields are optional on update — only replace if a new file is uploaded."
+    },
+    {
+      "id": "US-010",
+      "title": "Product edit & publish — frontend form",
+      "description": "As a creator, I want to edit my product details and publish/unpublish it.",
+      "acceptanceCriteria": [
+        "Edit page at /dashboard/products/:id (protected, only owner)",
+        "Form pre-filled with existing product data fetched from GET /api/products/:id",
+        "Can update all fields including slug",
+        "Publish/Unpublish toggle button that calls PATCH /api/products/:id/publish",
+        "When published, displays the public product URL /p/:slug as a copyable link",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Public product page",
+      "description": "As a customer, I want to view a product page so I can decide whether to buy it.",
+      "acceptanceCriteria": [
+        "Fastify route GET /api/products/by-slug/:slug returns product data (public, no auth) and increments viewCount",
+        "Frontend page at /p/:slug (public, no auth required)",
+        "Displays: product title, description, preview content (if any), cover image, price, creator name",
+        "Buy Now button visible (functionality added in checkout story)",
+        "Shows 404 page if product doesn't exist or is unpublished",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "viewCount incremented server-side in the API route, not on the client."
+    },
+    {
+      "id": "US-012",
+      "title": "Creator public profile page",
+      "description": "As a customer, I want to see all products by a creator on their profile page.",
+      "acceptanceCriteria": [
+        "Fastify route GET /api/creators/:slug returns creator info and their published products",
+        "Frontend page at /creator/:creatorSlug (public)",
+        "Shows creator name, avatar (if set), and list of published products",
+        "Each product card links to /p/:productSlug",
+        "Shows 404 if creator slug doesn't exist",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Use /creator/:slug frontend route to avoid conflicts with other top-level routes."
+    },
+    {
+      "id": "US-013",
+      "title": "Stripe checkout integration",
+      "description": "As a customer, I want to pay for a product via Stripe so I can download it.",
+      "acceptanceCriteria": [
+        "Install stripe Node.js SDK",
+        "Fastify route POST /api/checkout/:productSlug creates a Stripe Checkout Session",
+        "Checkout session includes product title, price, metadata (productId)",
+        "Accepts customerEmail in request body and passes to Checkout Session",
+        "Returns checkout session URL; frontend redirects to it",
+        "On success, Stripe redirects to /purchase/success?session_id={id}",
+        "On cancel, Stripe redirects back to /p/:slug",
+        "Buy Now button on product page calls this endpoint and redirects",
+        "STRIPE_SECRET_KEY loaded from .env",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Use Stripe Checkout in payment mode (one-time). FRONTEND_URL env var for redirect URLs."
+    },
+    {
+      "id": "US-014",
+      "title": "Stripe webhook — payment confirmation",
+      "description": "As the system, I need to process Stripe webhooks to confirm payments and create purchase records.",
+      "acceptanceCriteria": [
+        "Fastify route POST /api/webhooks/stripe handles checkout.session.completed event",
+        "Raw body access configured for webhook signature verification",
+        "Verifies webhook signature using STRIPE_WEBHOOK_SECRET",
+        "Creates Purchase record with status 'completed', stripePaymentIntentId from session",
+        "Generates unique downloadToken (UUID) and downloadExpiresAt (24 hours from now)",
+        "STRIPE_WEBHOOK_SECRET loaded from .env",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Use Fastify's addContentTypeParser for raw body on the webhook route. Extract customerEmail and productId from session metadata."
+    },
+    {
+      "id": "US-015",
+      "title": "Download page and secure file delivery",
+      "description": "As a customer, after payment I want to download my purchased file immediately.",
+      "acceptanceCriteria": [
+        "Fastify route GET /api/purchases/by-session/:sessionId returns purchase details (product title, downloadToken)",
+        "Frontend success page at /purchase/success fetches purchase using session_id query param",
+        "Displays 'Thank you' message with product title and Download button",
+        "Fastify route GET /api/download/:token validates token and checks downloadExpiresAt",
+        "Rate limiting on download endpoint using @fastify/rate-limit",
+        "Returns file with Content-Disposition: attachment header",
+        "Returns 404 if token invalid, 410 if expired",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "Download token is single-use concept — but for MVP just check expiration. Rate limit to ~10 requests per minute per IP."
+    },
+    {
+      "id": "US-016",
+      "title": "Purchase confirmation email",
+      "description": "As a customer, I want to receive an email with my download link after purchase.",
+      "acceptanceCriteria": [
+        "After purchase is confirmed in webhook handler, send email to customerEmail",
+        "Email contains: product title, download link (/api/download/:token), expiration notice (24h)",
+        "In development, log email content to console instead of sending",
+        "Email service abstracted behind a simple sendEmail function",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "Console.log is acceptable for dev. Structure the sendEmail function so it can be swapped for Resend or similar later."
+    },
+    {
+      "id": "US-017",
+      "title": "Creator sales analytics",
+      "description": "As a creator, I want to see basic sales metrics for my products.",
+      "acceptanceCriteria": [
+        "Fastify route GET /api/analytics returns per-product stats for authenticated creator",
+        "Stats include: product title, view count, purchase count, total revenue (sum of completed purchase amounts)",
+        "Also returns aggregate totals: total views, total purchases, total revenue",
+        "Analytics section displayed on /dashboard page or /dashboard/analytics",
+        "Revenue displayed formatted as dollars",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Use Prisma groupBy or aggregate queries. Purchase count = count of purchases with status 'completed'."
+    },
+    {
+      "id": "US-018",
+      "title": "Creator profile settings",
+      "description": "As a creator, I want to update my profile (name, slug, avatar).",
+      "acceptanceCriteria": [
+        "Settings page at /dashboard/settings (protected)",
+        "Fastify route PUT /api/profile accepts multipart form with name, slug, avatar (file)",
+        "Slug uniqueness validated; shows error if taken",
+        "Avatar image saved to uploads/images/ directory",
+        "Can update display name, slug, avatar",
+        "Success message shown after update",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Slug change affects the public creator profile URL."
+    }
+  ]
+}
