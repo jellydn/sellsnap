@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { createCheckoutSession } from "../lib/api";
 
 interface ProductData {
   id: string;
@@ -28,6 +29,8 @@ export function ProductPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [product, setProduct] = useState<ProductData | null>(null);
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [email, setEmail] = useState("");
 
   useEffect(() => {
     if (!slug) return;
@@ -48,6 +51,21 @@ export function ProductPage() {
         setLoading(false);
       });
   }, [slug]);
+
+  const handleBuyNow = async () => {
+    if (!product) return;
+
+    setCheckingOut(true);
+    setError(null);
+
+    try {
+      const { url } = await createCheckoutSession(product.slug, email || undefined);
+      window.location.href = url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create checkout session");
+      setCheckingOut(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -100,11 +118,31 @@ export function ProductPage() {
         <div className="whitespace-pre-wrap text-gray-700">{product.description}</div>
       </div>
 
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-600">{error}</div>
+      )}
+
+      <div className="mb-4">
+        <label htmlFor="email" className="block text-sm font-medium mb-1">
+          Email (for receipt)
+        </label>
+        <input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="your@email.com"
+          className="w-full px-3 py-2 border rounded-md"
+        />
+      </div>
+
       <button
         type="button"
-        className="w-full py-3 px-6 bg-blue-500 hover:bg-blue-600 text-white text-lg font-semibold rounded-lg"
+        onClick={handleBuyNow}
+        disabled={checkingOut}
+        className="w-full py-3 px-6 bg-blue-500 hover:bg-blue-600 text-white text-lg font-semibold rounded-lg disabled:opacity-50"
       >
-        Buy Now — {formatPrice(product.price)}
+        {checkingOut ? "Redirecting..." : `Buy Now — ${formatPrice(product.price)}`}
       </button>
 
       <p className="mt-4 text-center text-sm text-gray-500">{product.viewCount} views</p>

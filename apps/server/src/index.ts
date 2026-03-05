@@ -7,6 +7,7 @@ import { PrismaClient } from "@prisma/client";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import Fastify from "fastify";
+import Stripe from "stripe";
 
 const UPLOADS_DIR = join(process.cwd(), "uploads");
 const IMAGES_DIR = join(UPLOADS_DIR, "images");
@@ -30,6 +31,8 @@ const auth = betterAuth({
     enabled: true,
   },
 });
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
 
 function headersToHeaders(requestHeaders: Record<string, string | string[] | undefined>) {
   const headers = new Headers();
@@ -85,18 +88,31 @@ async function start() {
       orderBy: { createdAt: "desc" },
     });
 
-    return products.map((product) => ({
-      id: product.id,
-      title: product.title,
-      slug: product.slug,
-      description: product.description,
-      price: product.price,
-      coverImageUrl: product.coverImageUrl,
-      published: product.published,
-      viewCount: product.viewCount,
-      purchaseCount: product._count.purchases,
-      createdAt: product.createdAt,
-    }));
+    return products.map(
+      (product: {
+        id: string;
+        title: string;
+        slug: string;
+        description: string;
+        price: number;
+        coverImageUrl: string | null;
+        published: boolean;
+        viewCount: number;
+        createdAt: Date;
+        _count: { purchases: number };
+      }) => ({
+        id: product.id,
+        title: product.title,
+        slug: product.slug,
+        description: product.description,
+        price: product.price,
+        coverImageUrl: product.coverImageUrl,
+        published: product.published,
+        viewCount: product.viewCount,
+        purchaseCount: product._count.purchases,
+        createdAt: product.createdAt,
+      }),
+    );
   });
 
   server.get("/api/products/by-slug/:slug", async (request, reply) => {
@@ -176,15 +192,63 @@ async function start() {
       name: creator.name,
       slug: creator.slug,
       avatarUrl: creator.avatarUrl,
-      products: products.map((p) => ({
-        id: p.id,
-        title: p.title,
-        slug: p.slug,
-        price: p.price,
-        coverImageUrl: p.coverImageUrl,
-        createdAt: p.createdAt,
-      })),
+      products: products.map(
+        (p: {
+          id: string;
+          title: string;
+          slug: string;
+          price: number;
+          coverImageUrl: string | null;
+          createdAt: Date;
+        }) => ({
+          id: p.id,
+          title: p.title,
+          slug: p.slug,
+          price: p.price,
+          coverImageUrl: p.coverImageUrl,
+          createdAt: p.createdAt,
+        }),
+      ),
     };
+  });
+
+  server.post("/api/checkout/:productSlug", async (request, reply) => {
+    const { productSlug } = request.params as { productSlug: string };
+    const { customerEmail } = request.body as { customerEmail?: string };
+
+    const product = await prisma.product.findUnique({
+      where: { slug: productSlug, published: true },
+    });
+
+    if (!product) {
+      return reply.status(404).send({ error: "Product not found" });
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: product.title,
+              description: product.description || undefined,
+            },
+            unit_amount: product.price,
+          },
+          quantity: 1,
+        },
+      ],
+      mode: "payment",
+      success_url: `${process.env.FRONTEND_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/p/${product.slug}`,
+      customer_email: customerEmail,
+      metadata: {
+        productId: product.id,
+      },
+    });
+
+    return { url: session.url };
   });
 
   server.get("/api/products/:id", async (request, reply) => {
@@ -285,7 +349,7 @@ async function start() {
     if (description !== undefined) updateData.description = description;
     if (priceStr !== undefined) {
       const price = Math.round(parseFloat(priceStr) * 100);
-      if (isNaN(price) || price < 0) {
+      if (Number.isNaN(price) || price < 0) {
         return reply.status(400).send({ error: "Invalid price" });
       }
       updateData.price = price;
@@ -428,7 +492,7 @@ async function start() {
     }
 
     const price = Math.round(parseFloat(priceStr) * 100);
-    if (isNaN(price) || price < 0) {
+    if (Number.isNaN(price) || price < 0) {
       return reply.status(400).send({ error: "Invalid price" });
     }
 

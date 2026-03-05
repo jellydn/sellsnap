@@ -139,3 +139,26 @@ export async function toggleProductPublish(
 
   return response.json();
 }
+
+export async function createCheckoutSession(
+  productSlug: string,
+  customerEmail?: string,
+): Promise<{ url: string }> {
+  const response = await fetch(`${API_BASE}/checkout/${productSlug}`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ customerEmail }),
+  });
+
+  if (!response.ok) {
+    const error = await response
+      .json()
+      .catch(() => ({ error: "Failed to create checkout session" }));
+    throw new Error(error.error || "Failed to create checkout session");
+  }
+
+  return response.json();
+}

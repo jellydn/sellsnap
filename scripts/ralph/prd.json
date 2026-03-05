@@ -229,7 +229,7 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "Use Stripe Checkout in payment mode (one-time). FRONTEND_URL env var for redirect URLs."
     },
     {
