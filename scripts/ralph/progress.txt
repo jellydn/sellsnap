@@ -343,3 +343,42 @@
 - **Learnings for future iterations:**
   - Abstract email service behind sendEmail function for easy swap
 ---
+
+## 2026-03-05 17:40 - US-017
+[Session: ]
+- Implemented GET /api/analytics endpoint
+- Returns per-product stats: title, view count, purchase count, revenue
+- Returns aggregate totals: total views, total purchases, total revenue
+- Added AnalyticsSection component to Dashboard
+- Displays analytics table with all products and totals
+- Revenue formatted as dollars
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/src/index.ts (added GET /api/analytics endpoint)
+  - apps/web/src/lib/api.ts (added fetchAnalytics function)
+  - apps/web/src/pages/Dashboard.tsx (added AnalyticsSection)
+  - scripts/ralph/prd.json (marked US-017 as passes: true)
+- **Learnings for future iterations:**
+  - Use reduce to calculate revenue from purchases array
+---
+
+## 2026-03-05 17:50 - US-018
+[Session: ]
+- Implemented GET /api/profile and PUT /api/profile endpoints
+- PUT accepts multipart form with name, slug, avatar (file)
+- Validates slug uniqueness before updating
+- Avatar image saved to uploads/images/ directory
+- Created Settings page at /dashboard/settings
+- Form shows current profile data, allows updating name, slug, avatar
+- Shows success message after update
+- Added Settings link to header navigation
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/src/index.ts (added profile endpoints)
+  - apps/web/src/pages/Settings.tsx (new - settings page)
+  - apps/web/src/App.tsx (added settings route)
+  - apps/web/src/components/AppLayout.tsx (added settings link)
+  - scripts/ralph/prd.json (marked US-018 as passes: true)
+- **Learnings for future iterations:**
+  - Slug change affects public creator profile URL
+---
