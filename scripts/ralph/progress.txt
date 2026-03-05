@@ -117,3 +117,27 @@
   - biome lint requires htmlFor on labels - need to add id to inputs
   - Dev server ports may change if default ports are in use (5173->5175)
 ---
+
+## 2026-03-05 13:00 - US-006
+[Session: ]
+- Implemented GET /api/products endpoint in server that returns all products for authenticated user
+- Endpoint includes purchase count (count of completed purchases)
+- Created API client in web app at src/lib/api.ts
+- Created Dashboard page with product list showing title, price (formatted), published status badge, view count, purchase count
+- Added "Create Product" button linking to /dashboard/products/new
+- Empty state message when no products exist
+- All typechecks and lint pass
+- API tested and returns 401 when not authenticated
+- Files changed:
+  - apps/server/src/index.ts (added GET /api/products endpoint)
+  - apps/web/src/lib/api.ts (new - API client)
+  - apps/web/src/pages/Dashboard.tsx (new - dashboard with product list)
+  - apps/web/src/App.tsx (updated to use Dashboard component)
+  - apps/web/src/components/Layout.tsx (fixed button type for lint)
+  - scripts/ralph/prd.json (marked US-006 as passes: true)
+- **Learnings for future iterations:**
+  - better-auth on server uses auth.api.getSession({ headers }) to get session
+  - Convert Fastify headers to standard Headers object using headersToHeaders helper
+  - Prisma _count with nested where clause for filtering related records
+  - ChromeDevTools MCP not configured - browser testing skipped
+---
