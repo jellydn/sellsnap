@@ -52,7 +52,7 @@ export function ProductEdit() {
       const data: Parameters<typeof updateProduct>[1] = {
         title,
         description,
-        price: parseFloat(price) * 100,
+        price: parseFloat(price),
         slug,
         previewContent: previewContent || undefined,
       };
