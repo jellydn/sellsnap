@@ -30,3 +30,48 @@
   - @fastify/cors with origin: true allows all origins during dev
   - Remove project references from tsconfig when using extends for base config
 ---
+
+## 2026-03-05 10:45 - US-002
+[Session: ]
+- Added User, Product, Purchase tables to Prisma schema
+- User: id (cuid), name, email (unique), slug (unique), avatarUrl (optional), createdAt, products relation
+- Product: id (cuid), title, slug (unique), description, price (Int), coverImageUrl, filePath, previewContent, published (default false), viewCount (default 0), creatorId (FK), createdAt, updatedAt, purchases relation
+- Purchase: id (cuid), productId (FK), customerEmail, customerName, stripePaymentIntentId, amount (Int), status (String), downloadToken (unique), downloadExpiresAt, createdAt
+- Created Prisma migration "init" and applied to PostgreSQL
+- Generated Prisma client successfully
+- All typechecks pass
+- Files changed:
+  - packages/db/prisma/schema.prisma (updated with User, Product, Purchase models)
+  - packages/db/.env (added DATABASE_URL)
+  - packages/db/prisma/migrations/* (new migration files)
+- **Learnings for future iterations:**
+  - PostgreSQL container already running from previous session (docker ps to check)
+  - Prisma migration requires DATABASE_URL in packages/db/.env
+  - Use docker run with -d flag to run in background
+---
+[Session: ]
+- Implemented monorepo setup with pnpm workspaces
+- Created apps/web with React/Vite and react-router-dom
+- Created apps/server with Fastify and @fastify/cors
+- Created packages/db with Prisma schema (PostgreSQL datasource)
+- Created packages/tsconfig with shared TypeScript config
+- Configured Vite proxy to forward /api to server
+- Root dev script uses pnpm --filter to run both servers concurrently
+- All typechecks pass for web, server, and db packages
+- Verified health endpoint at /api/health returns { status: 'ok' }
+- Verified web app serves hello page at localhost:5173
+- Files changed:
+  - package.json (root)
+  - pnpm-workspace.yaml
+  - packages/tsconfig/base.json
+  - packages/tsconfig.json
+  - packages/db/package.json, tsconfig.json, prisma/schema.prisma, src/index.ts
+  - apps/web/package.json, tsconfig.json, vite.config.ts, index.html, src/main.tsx, src/App.tsx
+  - apps/server/package.json, tsconfig.json, src/index.ts, .env.example
+  - AGENTS.md (updated)
+- **Learnings for future iterations:**
+  - pnpm workspace requires packageManager field matching - bun works better for development
+  - Vite proxy configuration needs changeOrigin: true for CORS
+  - @fastify/cors with origin: true allows all origins during dev
+  - Remove project references from tsconfig when using extends for base config
+---

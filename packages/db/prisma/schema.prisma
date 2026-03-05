@@ -6,3 +6,47 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  slug      String   @unique
+  avatarUrl String?
+  createdAt DateTime @default(now())
+
+  products Product[]
+}
+
+model Product {
+  id             String   @id @default(cuid())
+  title          String
+  slug           String   @unique
+  description    String
+  price          Int
+  coverImageUrl  String?
+  filePath       String
+  previewContent String?
+  published      Boolean  @default(false)
+  viewCount      Int      @default(0)
+  creatorId      String
+  creator        User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  purchases Purchase[]
+}
+
+model Purchase {
+  id                   String   @id @default(cuid())
+  productId            String
+  product              Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customerEmail        String
+  customerName         String?
+  stripePaymentIntentId String
+  amount               Int
+  status               String
+  downloadToken        String   @unique
+  downloadExpiresAt    DateTime
+  createdAt            DateTime @default(now())
+}

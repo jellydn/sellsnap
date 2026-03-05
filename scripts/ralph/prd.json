@@ -33,7 +33,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Schema in packages/db/prisma/schema.prisma. Leave better-auth tables for the auth story — better-auth auto-generates its own tables."
     },
     {
