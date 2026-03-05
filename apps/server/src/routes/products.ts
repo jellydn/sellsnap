@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { auth, headersToHeaders } from "../lib/auth";
 import { prisma } from "../lib/prisma";
@@ -241,7 +240,7 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
         createdAt: product.createdAt,
       };
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
         slug = `${baseSlug}-${randomUUID().slice(0, 8)}`;
         const product = await prisma.product.create({
           data: {

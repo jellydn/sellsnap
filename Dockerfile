@@ -1,36 +1,29 @@
-FROM oven/bun:1 AS base
+FROM node:20-alpine AS base
 WORKDIR /app
 
 FROM base AS deps
 COPY package.json pnpm-lock.yaml ./
-COPY --from=oven/bun:1 /usr/local/bin/pnpm /usr/local/bin/pnpm
-RUN pnpm install --frozen-lockfile --prod
+RUN npm install -g pnpm && pnpm install
 
 FROM base AS builder
-COPY package.json pnpm-lock.yaml ./
-COPY --from=oven/bun:1 /usr/local/bin/pnpm /usr/local/bin/pnpm
-RUN pnpm install --frozen-lockfile
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN npm install -g pnpm && pnpm install
 
-COPY apps/web apps/server packages packages/db /app/
-COPY prisma /app/packages/db/prisma
+COPY apps /app/apps
+COPY packages /app/packages
 
-WORKDIR /app/packages/db
-RUN pnpm prisma generate
+RUN pnpm install --force
 
-WORKDIR /app/apps/server
-RUN pnpm build
+RUN cd /app/packages/db && pnpm exec prisma generate
 
-WORKDIR /app/apps/web
-RUN pnpm build
+RUN pnpm -F server build
+
+RUN pnpm -F web build
 
 FROM nginx:alpine AS runner
 
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
-COPY --from=builder /app/packages/db/prisma /docker-entrypoint.d/prisma
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nginx
 
 RUN chown -R nginx:nginx /usr/share/nginx/html && \
     chown -R nginx:nginx /var/cache/nginx && \

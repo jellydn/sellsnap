@@ -11,7 +11,6 @@ Thumbs.db
 !README.md
 .vscode
 .idea
-dist
 coverage
 *.test.ts
 *.test.tsx
