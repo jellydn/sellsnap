@@ -141,3 +141,30 @@
   - Prisma _count with nested where clause for filtering related records
   - ChromeDevTools MCP not configured - browser testing skipped
 ---
+
+## 2026-03-05 14:00 - US-007
+[Session: ]
+- Installed @fastify/multipart and @fastify/static for file uploads
+- Created uploads/images and uploads/files directories in apps/server
+- Implemented POST /api/products endpoint with multipart form data handling
+- Endpoint accepts: title, description, price, previewContent (optional), coverImage (file), productFile (file)
+- Auto-generates slug from title (kebab-case), appends random suffix if needed for uniqueness
+- Saves cover images to uploads/images/ and product files to uploads/files/
+- Configured @fastify/static to serve uploads/images/ at /uploads/images/*
+- Created product with published: false
+- Price converted from dollars (string) to cents (integer)
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/package.json (added @fastify/multipart, @fastify/static)
+  - apps/server/src/index.ts (added multipart handling, static serving, POST /api/products endpoint)
+  - apps/server/uploads/images/ (new directory)
+  - apps/server/uploads/files/ (new directory)
+  - scripts/ralph/prd.json (marked US-007 as passes: true)
+- **Learnings for future iterations:**
+  - Use request.parts() to iterate over multipart fields in @fastify/multipart
+  - For file uploads, iterate over file.file to collect chunks and Buffer.concat()
+  - @fastify/static serves from a directory - use decorateReply: false to avoid conflicts
+  - Static files served at /uploads/images/* from IMAGES_DIR
+  - FILES_DIR is NOT served publicly - files are protected from direct access
+  - Use Number.isNaN instead of isNaN for type safety
+
