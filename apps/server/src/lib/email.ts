@@ -1,10 +1,11 @@
+import { logger } from "@sellsnap/logger";
+
 export async function sendEmail(to: string, subject: string, content: string): Promise<void> {
   if (process.env.NODE_ENV === "development") {
-    console.log("=== EMAIL ===");
-    console.log(`To: ${to}`);
-    console.log(`Subject: ${subject}`);
-    console.log(`Content: ${content}`);
-    console.log("=============");
+    logger.box({
+      title: "EMAIL",
+      message: `To: ${to}\nSubject: ${subject}\n\n${content}`,
+    });
     return;
   }
 

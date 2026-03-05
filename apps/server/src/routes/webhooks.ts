@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { logger } from "@sellsnap/logger";
 import type { FastifyInstance } from "fastify";
 import type Stripe from "stripe";
 import { sendEmail } from "../lib/email";
@@ -20,7 +21,7 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
       const rawBody = request.body as string;
       event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
     } catch (err) {
-      console.error("Webhook signature verification failed:", err);
+      logger.error("Webhook signature verification failed:", err);
       return reply.status(400).send({ error: "Webhook signature verification failed" });
     }
 
@@ -31,7 +32,7 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
       const customerEmail = session.customer_email;
 
       if (!productId || !customerEmail) {
-        console.error("Missing metadata in webhook event");
+        logger.error("Missing metadata in webhook event");
         return reply.status(400).send({ error: "Missing metadata" });
       }
 
@@ -43,7 +44,7 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
       });
 
       if (!product) {
-        console.error(`Product not found: ${productId}`);
+        logger.error(`Product not found: ${productId}`);
         return reply.status(400).send({ error: "Product not found" });
       }
 
@@ -79,7 +80,7 @@ If you have any questions, please contact the seller.`;
         emailContent,
       );
 
-      console.log(`Purchase completed for product ${productId}, email: ${customerEmail}`);
+      logger.success(`Purchase completed for product ${productId}, email: ${customerEmail}`);
     }
 
     return reply.status(200).send({ received: true });

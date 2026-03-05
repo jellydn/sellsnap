@@ -8,7 +8,14 @@ export async function checkoutRoutes(server: FastifyInstance): Promise<void> {
     { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
     async (request, reply) => {
       const { productSlug } = request.params as { productSlug: string };
-      const { customerEmail } = JSON.parse(request.body as string) as { customerEmail?: string };
+
+      let customerEmail: string | undefined;
+      try {
+        const body = JSON.parse(request.body as string);
+        customerEmail = body?.customerEmail;
+      } catch {
+        // Ignore parsing errors, customerEmail is optional
+      }
 
       const product = await prisma.product.findUnique({
         where: { slug: productSlug, published: true },

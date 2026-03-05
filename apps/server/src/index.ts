@@ -1,6 +1,7 @@
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
+import { logger } from "@sellsnap/logger";
 import Fastify from "fastify";
 import { ensureUploadDirs, IMAGES_DIR } from "./lib/upload";
 import { analyticsRoutes } from "./routes/analytics";
@@ -15,7 +16,9 @@ import { webhookRoutes } from "./routes/webhooks";
 
 ensureUploadDirs();
 
-const server = Fastify();
+const server = Fastify({
+  logger: true,
+});
 
 async function start() {
   const allowedOrigins = process.env.CORS_ORIGIN?.split(",").map((o) => o.trim());
@@ -44,7 +47,7 @@ async function start() {
 
   await server.register(multipart, {
     limits: {
-      fileSize: 10 * 1024 * 1024,
+      fileSize: parseInt(process.env.MAX_UPLOAD_SIZE || "10485760", 10),
     },
   });
 
@@ -66,7 +69,7 @@ async function start() {
 
   try {
     await server.listen({ port: 3000 });
-    console.log("Server running at http://localhost:3000");
+    logger.success("Server running at http://localhost:3000");
   } catch (err) {
     server.log.error(err);
     process.exit(1);

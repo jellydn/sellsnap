@@ -21,9 +21,11 @@
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/static": "^9.0.0",
     "@prisma/client": "6.19.2",
+    "@sellsnap/logger": "workspace:*",
     "better-auth": "^1.5.3",
     "fastify": "^5.2.1",
-    "stripe": "^20.4.0"
+    "stripe": "^20.4.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.5",
