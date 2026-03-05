@@ -56,7 +56,7 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
           stripePaymentIntentId:
             typeof session.payment_intent === "string"
               ? session.payment_intent
-              : session.payment_intent!.id,
+              : (session.payment_intent?.id ?? ""),
           stripeSessionId: session.id as string,
           amount: session.amount_total || 0,
           status: "completed",

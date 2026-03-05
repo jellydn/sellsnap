@@ -1,6 +1,11 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { stripe } from "../lib/stripe";
+
+const checkoutBodySchema = z.object({
+  customerEmail: z.string().email().optional(),
+});
 
 export async function checkoutRoutes(server: FastifyInstance): Promise<void> {
   server.post(
@@ -12,7 +17,10 @@ export async function checkoutRoutes(server: FastifyInstance): Promise<void> {
       let customerEmail: string | undefined;
       try {
         const body = JSON.parse(request.body as string);
-        customerEmail = body?.customerEmail;
+        const parsed = checkoutBodySchema.safeParse(body);
+        if (parsed.success) {
+          customerEmail = parsed.data.customerEmail;
+        }
       } catch {
         // Ignore parsing errors, customerEmail is optional
       }
