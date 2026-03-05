@@ -268,3 +268,26 @@
   - Use /creator/:slug route to avoid conflicts with other top-level routes
   - Return only published products for public profile
 ---
+
+## 2026-03-05 16:45 - US-013
+[Session: ]
+- Installed stripe SDK in server package
+- Implemented POST /api/checkout/:productSlug endpoint
+- Creates Stripe Checkout Session with product title, price, metadata (productId)
+- Accepts customerEmail in request body and passes to Checkout Session
+- Returns checkout session URL for frontend redirect
+- On success, Stripe redirects to /purchase/success?session_id={id}
+- On cancel, Stripe redirects back to /p/:slug
+- Updated ProductPage to include email input and Buy Now button
+- STRIPE_SECRET_KEY already in .env
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/package.json (added stripe)
+  - apps/server/src/index.ts (added Stripe init and checkout endpoint)
+  - apps/web/src/lib/api.ts (added createCheckoutSession function)
+  - apps/web/src/pages/ProductPage.tsx (added email input and checkout handling)
+  - scripts/ralph/prd.json (marked US-013 as passes: true)
+- **Learnings for future iterations:**
+  - stripe SDK provides its own TypeScript types - no need for @types/stripe
+  - Use Number.isNaN instead of isNaN for type safety
+---
