@@ -162,3 +162,16 @@ export async function createCheckoutSession(
 
   return response.json();
 }
+
+export async function fetchAnalytics() {
+  const response = await fetch(`${API_BASE}/analytics`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: "Failed to fetch analytics" }));
+    throw new Error(error.error || "Failed to fetch analytics");
+  }
+
+  return response.json();
+}

@@ -415,6 +415,169 @@ If you have any questions, please contact the seller.`;
     return reply.send(require("node:fs").createReadStream(purchase.product.filePath));
   });
 
+  server.get("/api/analytics", async (request, reply) => {
+    const session = await auth.api.getSession({
+      headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),
+    });
+
+    if (!session || !session.user) {
+      return reply.status(401).send({ error: "Unauthorized" });
+    }
+
+    const products = await prisma.product.findMany({
+      where: { creatorId: session.user.id },
+      include: {
+        _count: {
+          select: {
+            purchases: {
+              where: { status: "completed" },
+            },
+          },
+        },
+        purchases: {
+          where: { status: "completed" },
+          select: { amount: true },
+        },
+      },
+    });
+
+    let totalViews = 0;
+    let totalPurchases = 0;
+    let totalRevenue = 0;
+
+    const productStats = products.map(
+      (product: {
+        id: string;
+        title: string;
+        viewCount: number;
+        _count: { purchases: number };
+        purchases: { amount: number }[];
+      }) => {
+        const purchaseCount = product._count.purchases;
+        const revenue = product.purchases.reduce(
+          (sum: number, p: { amount: number }) => sum + p.amount,
+          0,
+        );
+
+        totalViews += product.viewCount;
+        totalPurchases += purchaseCount;
+        totalRevenue += revenue;
+
+        return {
+          id: product.id,
+          title: product.title,
+          viewCount: product.viewCount,
+          purchaseCount,
+          revenue,
+        };
+      },
+    );
+
+    return {
+      products: productStats,
+      totals: {
+        totalViews,
+        totalPurchases,
+        totalRevenue,
+      },
+    };
+  });
+
+  server.get("/api/profile", async (request, reply) => {
+    const session = await auth.api.getSession({
+      headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),
+    });
+
+    if (!session || !session.user) {
+      return reply.status(401).send({ error: "Unauthorized" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+    });
+
+    if (!user) {
+      return reply.status(404).send({ error: "User not found" });
+    }
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      slug: user.slug,
+      avatarUrl: user.avatarUrl,
+    };
+  });
+
+  server.put("/api/profile", async (request, reply) => {
+    const session = await auth.api.getSession({
+      headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),
+    });
+
+    if (!session || !session.user) {
+      return reply.status(401).send({ error: "Unauthorized" });
+    }
+
+    const parts = request.parts();
+    const fields: Record<string, string> = {};
+    let avatar: Awaited<ReturnType<typeof parts.next>>["value"] | null = null;
+
+    for await (const part of parts) {
+      if (part.type === "file") {
+        if (part.fieldname === "avatar") {
+          avatar = part;
+        }
+      } else {
+        fields[part.fieldname] = part.value as string;
+      }
+    }
+
+    const name = fields.name;
+    const slug = fields.slug;
+
+    if (!name && !slug && !avatar) {
+      return reply.status(400).send({ error: "No fields to update" });
+    }
+
+    const updateData: { name?: string; slug?: string; avatarUrl?: string | null } = {};
+
+    if (name) updateData.name = name;
+    if (slug) {
+      const existing = await prisma.user.findFirst({
+        where: { slug, id: { not: session.user.id } },
+      });
+      if (existing) {
+        return reply.status(400).send({ error: "Slug already taken" });
+      }
+      updateData.slug = slug;
+    }
+
+    if (avatar) {
+      const ext = extname(avatar.filename || ".jpg") || ".jpg";
+      const avatarName = `${randomUUID()}${ext}`;
+      const avatarPath = join(IMAGES_DIR, avatarName);
+      const buffers: Buffer[] = [];
+      for await (const chunk of avatar.file) {
+        buffers.push(chunk);
+      }
+      writeFileSync(avatarPath, Buffer.concat(buffers));
+      updateData.avatarUrl = `/uploads/images/${avatarName}`;
+    }
+
+    const user = await prisma.user.update({
+      where: { id: session.user.id },
+      data: updateData,
+    });
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      slug: user.slug,
+      avatarUrl: user.avatarUrl,
+    };
+  });
+
   server.get("/api/products/:id", async (request, reply) => {
     const session = await auth.api.getSession({
       headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),

@@ -37,6 +37,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <span style={{ color: "#6b7280" }}>Loading...</span>
           ) : session ? (
             <>
+              <Link
+                to="/dashboard/settings"
+                style={{
+                  color: "#2563eb",
+                  textDecoration: "none",
+                  fontSize: "0.875rem",
+                }}
+              >
+                Settings
+              </Link>
               <span style={{ color: "#374151" }}>{session.user.name}</span>
               <button
                 type="button"

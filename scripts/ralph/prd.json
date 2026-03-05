@@ -297,7 +297,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": "Use Prisma groupBy or aggregate queries. Purchase count = count of purchases with status 'completed'."
     },
     {
@@ -315,7 +315,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": "Slug change affects the public creator profile URL."
     }
   ]

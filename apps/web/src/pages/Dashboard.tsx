@@ -1,9 +1,123 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { fetchProducts, type Product } from "../lib/api";
+import { fetchAnalytics, fetchProducts, type Product } from "../lib/api";
 
 function formatPrice(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+interface AnalyticsData {
+  products: Array<{
+    id: string;
+    title: string;
+    viewCount: number;
+    purchaseCount: number;
+    revenue: number;
+  }>;
+  totals: {
+    totalViews: number;
+    totalPurchases: number;
+    totalRevenue: number;
+  };
+}
+
+function AnalyticsSection({ analytics }: { analytics: AnalyticsData }) {
+  return (
+    <div style={{ marginBottom: "2rem" }}>
+      <h2 style={{ margin: "0 0 1rem", fontSize: "1.25rem", fontWeight: 600 }}>Analytics</h2>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "1rem",
+          marginBottom: "1.5rem",
+        }}
+      >
+        <div style={{ padding: "1rem", backgroundColor: "#eff6ff", borderRadius: "8px" }}>
+          <p style={{ margin: 0, fontSize: "0.875rem", color: "#6b7280" }}>Total Views</p>
+          <p style={{ margin: "0.25rem 0 0", fontSize: "1.5rem", fontWeight: 600 }}>
+            {analytics.totals.totalViews}
+          </p>
+        </div>
+        <div style={{ padding: "1rem", backgroundColor: "#f0fdf4", borderRadius: "8px" }}>
+          <p style={{ margin: 0, fontSize: "0.875rem", color: "#6b7280" }}>Total Purchases</p>
+          <p style={{ margin: "0.25rem 0 0", fontSize: "1.5rem", fontWeight: 600 }}>
+            {analytics.totals.totalPurchases}
+          </p>
+        </div>
+        <div style={{ padding: "1rem", backgroundColor: "#fdf4ff", borderRadius: "8px" }}>
+          <p style={{ margin: 0, fontSize: "0.875rem", color: "#6b7280" }}>Total Revenue</p>
+          <p style={{ margin: "0.25rem 0 0", fontSize: "1.5rem", fontWeight: 600 }}>
+            {formatPrice(analytics.totals.totalRevenue)}
+          </p>
+        </div>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
+              <th
+                style={{
+                  textAlign: "left",
+                  padding: "0.75rem",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                  color: "#6b7280",
+                }}
+              >
+                Product
+              </th>
+              <th
+                style={{
+                  textAlign: "right",
+                  padding: "0.75rem",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                  color: "#6b7280",
+                }}
+              >
+                Views
+              </th>
+              <th
+                style={{
+                  textAlign: "right",
+                  padding: "0.75rem",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                  color: "#6b7280",
+                }}
+              >
+                Purchases
+              </th>
+              <th
+                style={{
+                  textAlign: "right",
+                  padding: "0.75rem",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                  color: "#6b7280",
+                }}
+              >
+                Revenue
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {analytics.products.map((product) => (
+              <tr key={product.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                <td style={{ padding: "0.75rem" }}>{product.title}</td>
+                <td style={{ padding: "0.75rem", textAlign: "right" }}>{product.viewCount}</td>
+                <td style={{ padding: "0.75rem", textAlign: "right" }}>{product.purchaseCount}</td>
+                <td style={{ padding: "0.75rem", textAlign: "right" }}>
+                  {formatPrice(product.revenue)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 function ProductCard({ product }: { product: Product }) {
@@ -58,12 +172,16 @@ function ProductCard({ product }: { product: Product }) {
 
 export function Dashboard() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchProducts()
-      .then(setProducts)
+    Promise.all([fetchProducts(), fetchAnalytics()])
+      .then(([productsData, analyticsData]) => {
+        setProducts(productsData);
+        setAnalytics(analyticsData);
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
@@ -110,6 +228,10 @@ export function Dashboard() {
           Create Product
         </Link>
       </div>
+
+      {analytics && <AnalyticsSection analytics={analytics} />}
+
+      <h2 style={{ margin: "0 0 1rem", fontSize: "1.25rem", fontWeight: 600 }}>Products</h2>
 
       {products.length === 0 ? (
         <div

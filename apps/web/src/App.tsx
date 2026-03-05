@@ -7,6 +7,7 @@ import { ProductCreate } from "./pages/ProductCreate";
 import { ProductEdit } from "./pages/ProductEdit";
 import { ProductPage } from "./pages/ProductPage";
 import { PurchaseSuccess } from "./pages/PurchaseSuccess";
+import { Settings } from "./pages/Settings";
 import { SignIn } from "./pages/SignIn";
 import { SignUp } from "./pages/SignUp";
 
@@ -50,6 +51,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <ProductEdit />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
             </ProtectedRoute>
           }
         />
