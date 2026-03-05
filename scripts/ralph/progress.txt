@@ -190,3 +190,21 @@
   - biome organizes imports - type imports should come after named imports
   - ChromeDevTools MCP not configured - browser testing skipped
 ---
+
+## 2026-03-05 15:00 - US-009
+[Session: ]
+- Implemented GET /api/products/:id endpoint returning product (only if owned by authenticated user)
+- Implemented PUT /api/products/:id endpoint for updating product fields with multipart form data
+- Can update: title, description, price, slug, previewContent, coverImage (file), productFile (file)
+- Slug update validates uniqueness before saving
+- Implemented PATCH /api/products/:id/publish endpoint to toggle published field
+- All endpoints enforce ownership check - only product owner can access
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/src/index.ts (added GET, PUT, PATCH endpoints for products/:id)
+  - scripts/ralph/prd.json (marked US-009 as passes: true)
+- **Learnings for future iterations:**
+  - File fields are optional on update - only replace if a new file is uploaded
+  - Need to handle case where field is explicitly set to empty string vs not provided
+  - Use isNaN check with Number.isNaN for type safety
+---
