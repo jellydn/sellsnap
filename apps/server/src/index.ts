@@ -34,6 +34,19 @@ const auth = betterAuth({
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
 
+async function sendEmail(to: string, subject: string, content: string) {
+  if (process.env.NODE_ENV === "development") {
+    console.log("=== EMAIL ===");
+    console.log(`To: ${to}`);
+    console.log(`Subject: ${subject}`);
+    console.log(`Content: ${content}`);
+    console.log("=============");
+    return;
+  }
+
+  console.log(`[PROD] Would send email to ${to}: ${subject}`);
+}
+
 function headersToHeaders(requestHeaders: Record<string, string | string[] | undefined>) {
   const headers = new Headers();
   Object.entries(requestHeaders).forEach(([key, value]) => {
@@ -47,6 +60,11 @@ function headersToHeaders(requestHeaders: Record<string, string | string[] | und
 async function start() {
   await server.register(cors, {
     origin: true,
+  });
+
+  await server.register(await import("@fastify/rate-limit"), {
+    max: 10,
+    timeWindow: "1 minute",
   });
 
   await server.addContentTypeParser(
@@ -296,6 +314,15 @@ async function start() {
       const downloadToken = randomUUID();
       const downloadExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
+      const product = await prisma.product.findUnique({
+        where: { id: productId },
+      });
+
+      if (!product) {
+        console.error(`Product not found: ${productId}`);
+        return reply.status(400).send({ error: "Product not found" });
+      }
+
       await prisma.purchase.create({
         data: {
           productId,
@@ -309,10 +336,83 @@ async function start() {
         },
       });
 
+      const downloadLink = `${process.env.FRONTEND_URL}/api/download/${downloadToken}`;
+      const emailContent = `Thank you for your purchase!
+
+Product: ${product.title}
+Download Link: ${downloadLink}
+This link will expire in 24 hours.
+
+If you have any questions, please contact the seller.`;
+
+      await sendEmail(
+        customerEmail,
+        `Thank you for your purchase - ${product.title}`,
+        emailContent,
+      );
+
       console.log(`Purchase completed for product ${productId}, email: ${customerEmail}`);
     }
 
     return reply.status(200).send({ received: true });
+  });
+
+  server.get("/api/purchases/by-session/:sessionId", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+
+    const purchase = await prisma.purchase.findFirst({
+      where: {
+        stripePaymentIntentId: sessionId,
+        status: "completed",
+      },
+      include: {
+        product: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
+      },
+    });
+
+    if (!purchase) {
+      return reply.status(404).send({ error: "Purchase not found" });
+    }
+
+    return {
+      productTitle: purchase.product.title,
+      downloadToken: purchase.downloadToken,
+    };
+  });
+
+  server.get("/api/download/:token", async (request, reply) => {
+    const { token } = request.params as { token: string };
+
+    const purchase = await prisma.purchase.findUnique({
+      where: { downloadToken: token },
+      include: {
+        product: true,
+      },
+    });
+
+    if (!purchase) {
+      return reply.status(404).send({ error: "Download not found" });
+    }
+
+    if (purchase.downloadExpiresAt < new Date()) {
+      return reply.status(410).send({ error: "Download link expired" });
+    }
+
+    if (!existsSync(purchase.product.filePath)) {
+      return reply.status(404).send({ error: "File not found" });
+    }
+
+    const fileName = purchase.product.title + extname(purchase.product.filePath);
+
+    reply.header("Content-Disposition", `attachment; filename="${fileName}"`);
+    reply.header("Content-Type", "application/octet-stream");
+
+    return reply.send(require("node:fs").createReadStream(purchase.product.filePath));
   });
 
   server.get("/api/products/:id", async (request, reply) => {

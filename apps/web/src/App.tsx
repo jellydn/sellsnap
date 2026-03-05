@@ -6,6 +6,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { ProductCreate } from "./pages/ProductCreate";
 import { ProductEdit } from "./pages/ProductEdit";
 import { ProductPage } from "./pages/ProductPage";
+import { PurchaseSuccess } from "./pages/PurchaseSuccess";
 import { SignIn } from "./pages/SignIn";
 import { SignUp } from "./pages/SignUp";
 
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="/sign-in" element={<SignIn />} />
         <Route path="/p/:slug" element={<ProductPage />} />
         <Route path="/creator/:slug" element={<CreatorProfile />} />
+        <Route path="/purchase/success" element={<PurchaseSuccess />} />
         <Route
           path="/dashboard"
           element={

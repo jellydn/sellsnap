@@ -265,7 +265,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "Download token is single-use concept — but for MVP just check expiration. Rate limit to ~10 requests per minute per IP."
     },
     {
@@ -280,7 +280,7 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": "Console.log is acceptable for dev. Structure the sendEmail function so it can be swapped for Resend or similar later."
     },
     {
