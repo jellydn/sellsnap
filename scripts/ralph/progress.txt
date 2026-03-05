@@ -229,3 +229,23 @@
   - Use Link from react-router-dom to make product cards clickable
   - Need explicit type="button" on buttons to satisfy biome lint
 ---
+
+## 2026-03-05 16:00 - US-011
+[Session: ]
+- Implemented GET /api/products/by-slug/:slug endpoint (public, no auth)
+- Endpoint increments viewCount on each request
+- Returns product data including creator info (name, slug, avatar)
+- Created frontend page at /p/:slug (public, no auth required)
+- Displays: product title, description, preview content, cover image, price, creator name
+- Buy Now button visible (functionality will be added in checkout story)
+- Shows 404 page if product doesn't exist or is unpublished
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/src/index.ts (added GET /api/products/by-slug/:slug endpoint)
+  - apps/web/src/pages/ProductPage.tsx (new - public product page)
+  - apps/web/src/App.tsx (added route for /p/:slug)
+  - scripts/ralph/prd.json (marked US-011 as passes: true)
+- **Learnings for future iterations:**
+  - Public endpoints don't require auth - don't call auth.api.getSession
+  - Include creator info in the same query to avoid extra fetch
+---
