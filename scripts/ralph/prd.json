@@ -49,7 +49,7 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Use better-auth's toNodeHandler or Fastify adapter. Mount under /api/auth/*. Create .env.example with BETTER_AUTH_SECRET and DATABASE_URL placeholders."
     },
     {
