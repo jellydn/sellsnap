@@ -144,6 +144,49 @@ async function start() {
     };
   });
 
+  server.get("/api/creators/:slug", async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+
+    const creator = await prisma.user.findUnique({
+      where: { slug },
+    });
+
+    if (!creator) {
+      return reply.status(404).send({ error: "Creator not found" });
+    }
+
+    const products = await prisma.product.findMany({
+      where: {
+        creatorId: creator.id,
+        published: true,
+      },
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        price: true,
+        coverImageUrl: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return {
+      id: creator.id,
+      name: creator.name,
+      slug: creator.slug,
+      avatarUrl: creator.avatarUrl,
+      products: products.map((p) => ({
+        id: p.id,
+        title: p.title,
+        slug: p.slug,
+        price: p.price,
+        coverImageUrl: p.coverImageUrl,
+        createdAt: p.createdAt,
+      })),
+    };
+  });
+
   server.get("/api/products/:id", async (request, reply) => {
     const session = await auth.api.getSession({
       headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),

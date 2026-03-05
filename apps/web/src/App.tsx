@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { CreatorProfile } from "./pages/CreatorProfile";
 import { Dashboard } from "./pages/Dashboard";
 import { ProductCreate } from "./pages/ProductCreate";
 import { ProductEdit } from "./pages/ProductEdit";
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/sign-up" element={<SignUp />} />
         <Route path="/sign-in" element={<SignIn />} />
         <Route path="/p/:slug" element={<ProductPage />} />
+        <Route path="/creator/:slug" element={<CreatorProfile />} />
         <Route
           path="/dashboard"
           element={
