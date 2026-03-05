@@ -308,3 +308,38 @@
   - Need raw body for Stripe webhook signature verification
   - Use addContentTypeParser with parseAs: "string" to get raw body
 ---
+
+## 2026-03-05 17:20 - US-015
+[Session: ]
+- Implemented GET /api/purchases/by-session/:sessionId endpoint
+- Returns purchase details including product title and download token
+- Implemented GET /api/download/:token endpoint for file delivery
+- Validates token and checks downloadExpiresAt (returns 404 if invalid, 410 if expired)
+- Added @fastify/rate-limit for rate limiting (10 requests per minute)
+- Returns file with Content-Disposition: attachment header
+- Created PurchaseSuccess page at /purchase/success
+- Displays thank you message with product title and Download button
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/package.json (added @fastify/rate-limit)
+  - apps/server/src/index.ts (added download endpoints and rate limiting)
+  - apps/web/src/pages/PurchaseSuccess.tsx (new)
+  - apps/web/src/App.tsx (added route)
+  - scripts/ralph/prd.json (marked US-015 as passes: true)
+- **Learnings for future iterations:**
+  - Use reply.send with createReadStream for file downloads
+---
+
+## 2026-03-05 17:25 - US-016
+[Session: ]
+- Added sendEmail function to server
+- In development, logs email content to console
+- In production, logs would-be email (extensible for Resend/similar)
+- Webhook sends email after purchase with: product title, download link, expiration notice
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/src/index.ts (added sendEmail function and email sending in webhook)
+  - scripts/ralph/prd.json (marked US-016 as passes: true)
+- **Learnings for future iterations:**
+  - Abstract email service behind sendEmail function for easy swap
+---
