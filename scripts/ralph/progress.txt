@@ -249,3 +249,22 @@
   - Public endpoints don't require auth - don't call auth.api.getSession
   - Include creator info in the same query to avoid extra fetch
 ---
+
+## 2026-03-05 16:15 - US-012
+[Session: ]
+- Implemented GET /api/creators/:slug endpoint (public, no auth)
+- Returns creator info (name, slug, avatar) and their published products
+- Created frontend page at /creator/:slug (public, no auth required)
+- Shows creator name, avatar (or initials), and list of published products
+- Each product card links to /p/:productSlug
+- Shows 404 if creator slug doesn't exist
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/src/index.ts (added GET /api/creators/:slug endpoint)
+  - apps/web/src/pages/CreatorProfile.tsx (new - creator profile page)
+  - apps/web/src/App.tsx (added route for /creator/:slug)
+  - scripts/ralph/prd.json (marked US-012 as passes: true)
+- **Learnings for future iterations:**
+  - Use /creator/:slug route to avoid conflicts with other top-level routes
+  - Return only published products for public profile
+---
