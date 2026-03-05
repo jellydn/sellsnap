@@ -99,6 +99,51 @@ async function start() {
     }));
   });
 
+  server.get("/api/products/by-slug/:slug", async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+
+    const product = await prisma.product.findUnique({
+      where: { slug },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    if (!product || !product.published) {
+      return reply.status(404).send({ error: "Product not found" });
+    }
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { viewCount: { increment: 1 } },
+    });
+
+    return {
+      id: product.id,
+      title: product.title,
+      slug: product.slug,
+      description: product.description,
+      price: product.price,
+      coverImageUrl: product.coverImageUrl,
+      previewContent: product.previewContent,
+      viewCount: product.viewCount + 1,
+      createdAt: product.createdAt,
+      creator: {
+        id: product.creator.id,
+        name: product.creator.name,
+        slug: product.creator.slug,
+        avatarUrl: product.creator.avatarUrl,
+      },
+    };
+  });
+
   server.get("/api/products/:id", async (request, reply) => {
     const session = await auth.api.getSession({
       headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),

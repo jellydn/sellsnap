@@ -4,6 +4,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Dashboard } from "./pages/Dashboard";
 import { ProductCreate } from "./pages/ProductCreate";
 import { ProductEdit } from "./pages/ProductEdit";
+import { ProductPage } from "./pages/ProductPage";
 import { SignIn } from "./pages/SignIn";
 import { SignUp } from "./pages/SignUp";
 
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/sign-up" element={<SignUp />} />
         <Route path="/sign-in" element={<SignIn />} />
+        <Route path="/p/:slug" element={<ProductPage />} />
         <Route
           path="/dashboard"
           element={
