@@ -2,6 +2,7 @@
 - Use bun instead of pnpm for installing dependencies (pnpm had issues with packageManager field)
 - Web app runs on port 5173, server on port 3000
 - Vite proxy /api to server at localhost:3000
+- ChromeDevTools MCP not configured. Frontend testing skipped.
 
 ## 2026-03-05 10:30 - US-001
 [Session: ]
@@ -167,4 +168,25 @@
   - Static files served at /uploads/images/* from IMAGES_DIR
   - FILES_DIR is NOT served publicly - files are protected from direct access
   - Use Number.isNaN instead of isNaN for type safety
+---
 
+## 2026-03-05 14:30 - US-008
+[Session: ]
+- Created ProductCreate page at /dashboard/products/new (protected route)
+- Form fields: title, description, price (in dollars), preview content (optional), cover image (file), digital file (file)
+- Uses FormData to submit as multipart/form-data to POST /api/products
+- Shows loading state during submission
+- On success, redirects to /dashboard/products/:id (edit page)
+- On error, shows error message
+- All typechecks and lint pass
+- Files changed:
+  - apps/web/src/lib/api.ts (added createProduct function and CreateProductData type)
+  - apps/web/src/pages/ProductCreate.tsx (new - product creation form)
+  - apps/web/src/App.tsx (added route for /dashboard/products/new)
+  - scripts/ralph/prd.json (marked US-008 as passes: true)
+- **Learnings for future iterations:**
+  - Use FormData for multipart file uploads
+  - File inputs return File objects which can be directly appended to FormData
+  - biome organizes imports - type imports should come after named imports
+  - ChromeDevTools MCP not configured - browser testing skipped
+---

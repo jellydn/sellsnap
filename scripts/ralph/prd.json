@@ -141,7 +141,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "Use FormData for multipart submission. Keep the form simple with Tailwind styling."
     },
     {

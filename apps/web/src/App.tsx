@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Dashboard } from "./pages/Dashboard";
+import { ProductCreate } from "./pages/ProductCreate";
 import { SignIn } from "./pages/SignIn";
 import { SignUp } from "./pages/SignUp";
 
@@ -26,6 +27,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/products/new"
+          element={
+            <ProtectedRoute>
+              <ProductCreate />
             </ProtectedRoute>
           }
         />
