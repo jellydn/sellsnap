@@ -62,11 +62,6 @@ async function start() {
     origin: true,
   });
 
-  await server.register(await import("@fastify/rate-limit"), {
-    max: 10,
-    timeWindow: "1 minute",
-  });
-
   await server.addContentTypeParser(
     "application/json",
     { parseAs: "string" },
@@ -329,6 +324,7 @@ async function start() {
           customerEmail,
           customerName: session.customer_details?.name || null,
           stripePaymentIntentId: session.payment_intent as string,
+          stripeSessionId: session.id as string,
           amount: session.amount_total || 0,
           status: "completed",
           downloadToken,
@@ -362,7 +358,7 @@ If you have any questions, please contact the seller.`;
 
     const purchase = await prisma.purchase.findFirst({
       where: {
-        stripePaymentIntentId: sessionId,
+        stripeSessionId: sessionId,
         status: "completed",
       },
       include: {
@@ -385,35 +381,46 @@ If you have any questions, please contact the seller.`;
     };
   });
 
-  server.get("/api/download/:token", async (request, reply) => {
-    const { token } = request.params as { token: string };
-
-    const purchase = await prisma.purchase.findUnique({
-      where: { downloadToken: token },
-      include: {
-        product: true,
+  server.get(
+    "/api/download/:token",
+    {
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: "1 minute",
+        },
       },
-    });
+    },
+    async (request, reply) => {
+      const { token } = request.params as { token: string };
 
-    if (!purchase) {
-      return reply.status(404).send({ error: "Download not found" });
-    }
+      const purchase = await prisma.purchase.findUnique({
+        where: { downloadToken: token },
+        include: {
+          product: true,
+        },
+      });
 
-    if (purchase.downloadExpiresAt < new Date()) {
-      return reply.status(410).send({ error: "Download link expired" });
-    }
+      if (!purchase) {
+        return reply.status(404).send({ error: "Download not found" });
+      }
 
-    if (!existsSync(purchase.product.filePath)) {
-      return reply.status(404).send({ error: "File not found" });
-    }
+      if (purchase.downloadExpiresAt < new Date()) {
+        return reply.status(410).send({ error: "Download link expired" });
+      }
 
-    const fileName = purchase.product.title + extname(purchase.product.filePath);
+      if (!existsSync(purchase.product.filePath)) {
+        return reply.status(404).send({ error: "File not found" });
+      }
 
-    reply.header("Content-Disposition", `attachment; filename="${fileName}"`);
-    reply.header("Content-Type", "application/octet-stream");
+      const fileName = purchase.product.title + extname(purchase.product.filePath);
 
-    return reply.send(require("node:fs").createReadStream(purchase.product.filePath));
-  });
+      reply.header("Content-Disposition", `attachment; filename="${fileName}"`);
+      reply.header("Content-Type", "application/octet-stream");
+
+      return reply.send(require("node:fs").createReadStream(purchase.product.filePath));
+    },
+  );
 
   server.get("/api/analytics", async (request, reply) => {
     const session = await auth.api.getSession({

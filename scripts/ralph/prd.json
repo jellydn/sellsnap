@@ -318,5 +318,13 @@
       "passes": true,
       "notes": "Slug change affects the public creator profile URL."
     }
+  ],
+  "findings": [
+    {
+      "severity": "info",
+      "story": "US-018",
+      "title": "Styling inconsistency across pages",
+      "description": "Settings page uses Tailwind CSS classes while Dashboard, ProductPage, and other pages use inline styles. Should be consistent across the app."
+    }
   ]
 }
