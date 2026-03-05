@@ -44,6 +44,7 @@ model Purchase {
   customerEmail        String
   customerName         String?
   stripePaymentIntentId String
+  stripeSessionId      String?
   amount               Int
   status               String
   downloadToken        String   @unique
