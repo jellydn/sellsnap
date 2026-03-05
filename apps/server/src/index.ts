@@ -99,6 +99,209 @@ async function start() {
     }));
   });
 
+  server.get("/api/products/:id", async (request, reply) => {
+    const session = await auth.api.getSession({
+      headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),
+    });
+
+    if (!session || !session.user) {
+      return reply.status(401).send({ error: "Unauthorized" });
+    }
+
+    const { id } = request.params as { id: string };
+
+    const product = await prisma.product.findUnique({
+      where: { id },
+    });
+
+    if (!product) {
+      return reply.status(404).send({ error: "Product not found" });
+    }
+
+    if (product.creatorId !== session.user.id) {
+      return reply.status(403).send({ error: "Forbidden" });
+    }
+
+    return {
+      id: product.id,
+      title: product.title,
+      slug: product.slug,
+      description: product.description,
+      price: product.price,
+      coverImageUrl: product.coverImageUrl,
+      previewContent: product.previewContent,
+      published: product.published,
+      viewCount: product.viewCount,
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+    };
+  });
+
+  server.put("/api/products/:id", async (request, reply) => {
+    const session = await auth.api.getSession({
+      headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),
+    });
+
+    if (!session || !session.user) {
+      return reply.status(401).send({ error: "Unauthorized" });
+    }
+
+    const { id } = request.params as { id: string };
+
+    const existingProduct = await prisma.product.findUnique({
+      where: { id },
+    });
+
+    if (!existingProduct) {
+      return reply.status(404).send({ error: "Product not found" });
+    }
+
+    if (existingProduct.creatorId !== session.user.id) {
+      return reply.status(403).send({ error: "Forbidden" });
+    }
+
+    const parts = request.parts();
+    const fields: Record<string, string> = {};
+    let coverImage: Awaited<ReturnType<typeof parts.next>>["value"] | null = null;
+    let productFile: Awaited<ReturnType<typeof parts.next>>["value"] | null = null;
+
+    for await (const part of parts) {
+      if (part.type === "file") {
+        if (part.fieldname === "coverImage") {
+          coverImage = part;
+        } else if (part.fieldname === "productFile") {
+          productFile = part;
+        }
+      } else {
+        fields[part.fieldname] = part.value as string;
+      }
+    }
+
+    const title = fields.title;
+    const description = fields.description;
+    const priceStr = fields.price;
+    const slug = fields.slug;
+    const previewContent = fields.previewContent;
+
+    const updateData: {
+      title?: string;
+      description?: string;
+      price?: number;
+      slug?: string;
+      previewContent?: string | null;
+      coverImageUrl?: string | null;
+      filePath?: string;
+    } = {};
+
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (priceStr !== undefined) {
+      const price = Math.round(parseFloat(priceStr) * 100);
+      if (isNaN(price) || price < 0) {
+        return reply.status(400).send({ error: "Invalid price" });
+      }
+      updateData.price = price;
+    }
+    if (previewContent !== undefined) updateData.previewContent = previewContent || null;
+
+    if (slug !== undefined && slug !== existingProduct.slug) {
+      const existingWithSlug = await prisma.product.findUnique({
+        where: { slug },
+      });
+      if (existingWithSlug) {
+        return reply.status(400).send({ error: "Slug already exists" });
+      }
+      updateData.slug = slug;
+    }
+
+    let coverImageUrl: string | null = existingProduct.coverImageUrl;
+    if (coverImage) {
+      const ext = extname(coverImage.filename || ".jpg") || ".jpg";
+      const coverImageName = `${randomUUID()}${ext}`;
+      const coverImagePath = join(IMAGES_DIR, coverImageName);
+      const buffers: Buffer[] = [];
+      for await (const chunk of coverImage.file) {
+        buffers.push(chunk);
+      }
+      writeFileSync(coverImagePath, Buffer.concat(buffers));
+      coverImageUrl = `/uploads/images/${coverImageName}`;
+    }
+    if (coverImage !== null || fields.coverImage !== undefined) {
+      updateData.coverImageUrl = coverImageUrl;
+    }
+
+    let filePath = existingProduct.filePath;
+    if (productFile) {
+      const ext = extname(productFile.filename || ".pdf") || ".pdf";
+      const productFileName = `${randomUUID()}${ext}`;
+      const newFilePath = join(FILES_DIR, productFileName);
+      const buffers: Buffer[] = [];
+      for await (const chunk of productFile.file) {
+        buffers.push(chunk);
+      }
+      writeFileSync(newFilePath, Buffer.concat(buffers));
+      filePath = newFilePath;
+    }
+    if (productFile !== null || fields.productFile !== undefined) {
+      updateData.filePath = filePath;
+    }
+
+    const product = await prisma.product.update({
+      where: { id },
+      data: updateData,
+    });
+
+    return {
+      id: product.id,
+      title: product.title,
+      slug: product.slug,
+      description: product.description,
+      price: product.price,
+      coverImageUrl: product.coverImageUrl,
+      previewContent: product.previewContent,
+      published: product.published,
+      viewCount: product.viewCount,
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+    };
+  });
+
+  server.patch("/api/products/:id/publish", async (request, reply) => {
+    const session = await auth.api.getSession({
+      headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),
+    });
+
+    if (!session || !session.user) {
+      return reply.status(401).send({ error: "Unauthorized" });
+    }
+
+    const { id } = request.params as { id: string };
+
+    const product = await prisma.product.findUnique({
+      where: { id },
+    });
+
+    if (!product) {
+      return reply.status(404).send({ error: "Product not found" });
+    }
+
+    if (product.creatorId !== session.user.id) {
+      return reply.status(403).send({ error: "Forbidden" });
+    }
+
+    const updatedProduct = await prisma.product.update({
+      where: { id },
+      data: { published: !product.published },
+    });
+
+    return {
+      id: updatedProduct.id,
+      title: updatedProduct.title,
+      slug: updatedProduct.slug,
+      published: updatedProduct.published,
+    };
+  });
+
   server.post("/api/products", async (request, reply) => {
     const session = await auth.api.getSession({
       headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),

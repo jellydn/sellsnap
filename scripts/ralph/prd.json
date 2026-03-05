@@ -158,7 +158,7 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "File fields are optional on update — only replace if a new file is uploaded."
     },
     {
