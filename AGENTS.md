@@ -99,9 +99,38 @@ import { type User } from "@/types/user";
 
 - Use try/catch with async/await
 - Return typed error results or use Error boundaries
+- Never expose internal errors to clients
 
 ```typescript
 type Result<T> = { success: true; data: T } | { success: false; error: string };
+
+async function fetchUser(id: string): Promise<Result<User>> {
+  try {
+    const user = await db.user.findUnique({ where: { id } });
+    if (!user) return { success: false, error: "User not found" };
+    return { success: true, data: user };
+  } catch (e) {
+    return { success: false, error: "Failed to fetch user" };
+  }
+}
+```
+
+### Testing
+
+- Use Vitest for unit and integration tests
+- Follow AAA pattern: Arrange, Act, Assert
+- Test behavior, not implementation details
+- Use `@testing-library/react` for component tests
+
+```typescript
+test("should increment counter when button is clicked", () => {
+  render(<Counter />);
+  const button = screen.getByRole("button", { name: /increment/i });
+
+  fireEvent.click(button);
+
+  expect(screen.getByTestId("counter-value")).toHaveTextContent("1");
+});
 ```
 
 ### Database / Prisma
@@ -109,15 +138,23 @@ type Result<T> = { success: true; data: T } | { success: false; error: string };
 - Use Prisma client for all database operations
 - Name migrations descriptively: `just prisma-migrate add_product_slug`
 - Use transactions for multi-step operations
+- Environment variables: `DATABASE_URL` (required), check `.env.example` for others
 
 ### API Design (Fastify)
 
 - Use typed request/response schemas
 - Return consistent response format
+- Validate inputs using Fastify schema validation
+
+### Environment Variables
+
+- Never commit secrets - use `.env` files
+- Copy from `.env.example` for required variables
+- Server requires: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `DATABASE_AUTH_TOKEN`
 
 ### CSS / Styling
 
-- Use Tailwind CSS
+- Use Tailwind CSS (v3 in web)
 - Keep custom CSS minimal
 - Use utility classes
 
