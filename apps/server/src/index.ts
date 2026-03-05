@@ -49,6 +49,19 @@ async function start() {
     origin: true,
   });
 
+  await server.addContentTypeParser(
+    "application/json",
+    { parseAs: "string" },
+    (request, body, done) => {
+      try {
+        request.body = body;
+        done(null, body as object);
+      } catch (err) {
+        done(err as Error, undefined);
+      }
+    },
+  );
+
   await server.register(multipart, {
     limits: {
       fileSize: 100 * 1024 * 1024,
@@ -249,6 +262,57 @@ async function start() {
     });
 
     return { url: session.url };
+  });
+
+  server.post("/api/webhooks/stripe", async (request, reply) => {
+    const sig = request.headers["stripe-signature"] as string;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    if (!webhookSecret) {
+      return reply.status(500).send({ error: "Webhook secret not configured" });
+    }
+
+    let event: Stripe.Event;
+
+    try {
+      const rawBody = request.body as string;
+      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+    } catch (err) {
+      console.error("Webhook signature verification failed:", err);
+      return reply.status(400).send({ error: "Webhook signature verification failed" });
+    }
+
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session;
+
+      const productId = session.metadata?.productId;
+      const customerEmail = session.customer_email;
+
+      if (!productId || !customerEmail) {
+        console.error("Missing metadata in webhook event");
+        return reply.status(400).send({ error: "Missing metadata" });
+      }
+
+      const downloadToken = randomUUID();
+      const downloadExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      await prisma.purchase.create({
+        data: {
+          productId,
+          customerEmail,
+          customerName: session.customer_details?.name || null,
+          stripePaymentIntentId: session.payment_intent as string,
+          amount: session.amount_total || 0,
+          status: "completed",
+          downloadToken,
+          downloadExpiresAt,
+        },
+      });
+
+      console.log(`Purchase completed for product ${productId}, email: ${customerEmail}`);
+    }
+
+    return reply.status(200).send({ received: true });
   });
 
   server.get("/api/products/:id", async (request, reply) => {

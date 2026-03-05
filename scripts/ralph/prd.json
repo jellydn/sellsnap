@@ -246,7 +246,7 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "Use Fastify's addContentTypeParser for raw body on the webhook route. Extract customerEmail and productId from session metadata."
     },
     {
