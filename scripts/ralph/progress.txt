@@ -208,3 +208,24 @@
   - Need to handle case where field is explicitly set to empty string vs not provided
   - Use isNaN check with Number.isNaN for type safety
 ---
+
+## 2026-03-05 15:30 - US-010
+[Session: ]
+- Created ProductEdit page at /dashboard/products/:id (protected, only owner)
+- Form pre-filled with existing product data fetched from GET /api/products/:id
+- Can update all fields including slug, title, description, price, preview content
+- Cover image and product file can be replaced
+- Publish/Unpublish toggle button calls PATCH /api/products/:id/publish
+- When published, displays the public product URL /p/:slug as a copyable link
+- Product cards on dashboard now link to edit page
+- All typechecks and lint pass
+- Files changed:
+  - apps/web/src/lib/api.ts (added fetchProduct, updateProduct, toggleProductPublish functions)
+  - apps/web/src/pages/ProductEdit.tsx (new - product edit form)
+  - apps/web/src/pages/Dashboard.tsx (added Link to product cards)
+  - apps/web/src/App.tsx (added route for /dashboard/products/:id)
+  - scripts/ralph/prd.json (marked US-010 as passes: true)
+- **Learnings for future iterations:**
+  - Use Link from react-router-dom to make product cards clickable
+  - Need explicit type="button" on buttons to satisfy biome lint
+---
