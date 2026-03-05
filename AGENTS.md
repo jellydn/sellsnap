@@ -20,81 +20,43 @@ Tech stack: React 18, Vite, TypeScript (strict), Tailwind CSS, Prisma, PostgreSQ
 
 ## Build / Development Commands
 
-This project uses `pnpm` as the package manager. You can also use the `just` CLI for shortcuts.
+This project uses `pnpm` as the package manager. Use `just` CLI for shortcuts.
 
-### Using pnpm
+### Using just (recommended)
 
 ```bash
-# Install dependencies
-pnpm install
-
-# Or per workspace:
-cd apps/web && pnpm install
-cd apps/server && pnpm install
-cd packages/db && pnpm install
-
-# Start all dev servers (web + server)
-pnpm dev
-
-# Type check all packages
-pnpm typecheck
-
-# Type check specific package
-pnpm typecheck:web
-pnpm typecheck:server
-
-# Build web app
-cd apps/web && pnpm build
+just install           # Install dependencies
+just dev               # Start all dev servers (web + server)
+just typecheck          # Type check all packages
+just typecheck-web      # Type check web only
+just typecheck-server   # Type check server only
+just build-web         # Build web app
+just lint               # Lint and format (Biome)
+just test               # Run all tests
+just test-watch         # Watch mode
+just test-file <file>   # Run single test file
 ```
 
-### Using just (recommended shortcuts)
+### Using pnpm directly
 
 ```bash
-# Install, dev, typecheck
-just install
-just dev
-just typecheck
-just typecheck-web
-just typecheck-server
-
-# Build web
-just build-web
-
-# Lint and format
-just lint
-
-# Run tests
-just test              # Run all tests
-just test-watch        # Watch mode
-just test-file <file>  # Run single test file
-
-# Prisma commands
-just prisma-migrate <name>
-just prisma-generate
-just prisma-push
+pnpm install
+pnpm dev
+pnpm typecheck
+cd apps/web && pnpm build
 ```
 
 ### Running a Single Test
 
-**Option 1: Using just (recommended)**
-
 ```bash
+# Using just (recommended)
 just test-file src/components/__tests__/MyComponent.test.tsx
-```
 
-**Option 2: Using pnpm/vitest directly**
-
-```bash
+# Using pnpm/vitest directly
 cd apps/web && pnpm vitest run src/components/__tests__/MyComponent.test.tsx
 
 # Watch mode
 cd apps/web && pnpm vitest src/components/__tests__/MyComponent.test.tsx
-```
-
-**Note:** This project does not have a test framework configured. To add tests:
-
-```bash
-cd apps/web && pnpm add -D vitest @testing-library/react @testing-library/jest-dom jsdom
 ```
 
 ---
@@ -163,7 +125,7 @@ type Result<T> = { success: true; data: T } | { success: false; error: string };
 
 ## Linting & Formatting
 
-Use Biome (configured in `apps/web/biome.json` and `apps/server/biome.json`):
+Uses Biome (configured in `apps/web/biome.json` and `apps/server/biome.json`):
 
 ```bash
 # Run on web
@@ -172,7 +134,8 @@ cd apps/web && bun x biome check --write .
 # Run on server
 cd apps/server && bun x biome check --write .
 
-# Or: just lint
+# Or use just
+just lint
 ```
 
 Pre-commit hooks run automatically on commit (via prek, uses bun):
