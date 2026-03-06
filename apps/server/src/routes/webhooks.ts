@@ -48,6 +48,14 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
         return reply.status(400).send({ error: "Product not found" });
       }
 
+      const existingPurchase = await prisma.purchase.findFirst({
+        where: { stripeSessionId: session.id },
+      });
+      if (existingPurchase) {
+        logger.warn(`Duplicate webhook event for session ${session.id}, skipping`);
+        return reply.status(200).send({ received: true });
+      }
+
       await prisma.purchase.create({
         data: {
           productId,
@@ -65,7 +73,8 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
         },
       });
 
-      const downloadLink = `${process.env.FRONTEND_URL}/api/download/${downloadToken}`;
+      const apiUrl = process.env.API_URL || process.env.FRONTEND_URL || "http://localhost:3000";
+      const downloadLink = `${apiUrl}/api/download/${downloadToken}`;
       const emailContent = `Thank you for your purchase!
 
 Product: ${product.title}

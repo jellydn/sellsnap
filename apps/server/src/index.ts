@@ -68,8 +68,10 @@ async function start() {
   await server.register(analyticsRoutes);
 
   try {
-    await server.listen({ port: 3000 });
-    logger.success("Server running at http://localhost:3000");
+    const port = parseInt(process.env.PORT || "3000", 10);
+    const host = process.env.HOST || "0.0.0.0";
+    await server.listen({ port, host });
+    logger.success(`Server running at http://${host}:${port}`);
   } catch (err) {
     server.log.error(err);
     process.exit(1);

@@ -240,7 +240,12 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
         createdAt: product.createdAt,
       };
     } catch (error) {
-      if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "P2002"
+      ) {
         slug = `${baseSlug}-${randomUUID().slice(0, 8)}`;
         const product = await prisma.product.create({
           data: {

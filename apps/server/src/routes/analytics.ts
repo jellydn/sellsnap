@@ -22,44 +22,40 @@ export async function analyticsRoutes(server: FastifyInstance): Promise<void> {
             },
           },
         },
-        purchases: {
-          where: { status: "completed" },
-          select: { amount: true },
-        },
       },
     });
+
+    const revenueByProduct = await prisma.purchase.groupBy({
+      by: ["productId"],
+      where: {
+        product: { creatorId: session.user.id },
+        status: "completed",
+      },
+      _sum: { amount: true },
+    });
+
+    const revenueMap = new Map(revenueByProduct.map((r) => [r.productId, r._sum.amount || 0]));
 
     let totalViews = 0;
     let totalPurchases = 0;
     let totalRevenue = 0;
 
-    const productStats = products.map(
-      (product: {
-        id: string;
-        title: string;
-        viewCount: number;
-        _count: { purchases: number };
-        purchases: { amount: number }[];
-      }) => {
-        const purchaseCount = product._count.purchases;
-        const revenue = product.purchases.reduce(
-          (sum: number, p: { amount: number }) => sum + p.amount,
-          0,
-        );
+    const productStats = products.map((product) => {
+      const purchaseCount = product._count.purchases;
+      const revenue = revenueMap.get(product.id) || 0;
 
-        totalViews += product.viewCount;
-        totalPurchases += purchaseCount;
-        totalRevenue += revenue;
+      totalViews += product.viewCount;
+      totalPurchases += purchaseCount;
+      totalRevenue += revenue;
 
-        return {
-          id: product.id,
-          title: product.title,
-          viewCount: product.viewCount,
-          purchaseCount,
-          revenue,
-        };
-      },
-    );
+      return {
+        id: product.id,
+        title: product.title,
+        viewCount: product.viewCount,
+        purchaseCount,
+        revenue,
+      };
+    });
 
     return {
       products: productStats,

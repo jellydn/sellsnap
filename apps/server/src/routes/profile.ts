@@ -64,6 +64,28 @@ export async function profileRoutes(server: FastifyInstance): Promise<void> {
 
     if (name) updateData.name = name;
     if (slug) {
+      const SLUG_REGEX = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
+      const RESERVED_SLUGS = new Set([
+        "api",
+        "sign-in",
+        "sign-up",
+        "dashboard",
+        "admin",
+        "settings",
+        "purchase",
+        "creator",
+        "p",
+      ]);
+
+      if (!SLUG_REGEX.test(slug)) {
+        return reply
+          .status(400)
+          .send({ error: "Slug must be 3-40 characters, lowercase alphanumeric and hyphens only" });
+      }
+      if (RESERVED_SLUGS.has(slug)) {
+        return reply.status(400).send({ error: "This slug is reserved" });
+      }
+
       const existing = await prisma.user.findFirst({
         where: { slug, id: { not: session.user.id } },
       });

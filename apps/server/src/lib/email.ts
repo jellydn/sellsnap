@@ -9,7 +9,5 @@ export async function sendEmail(to: string, subject: string, content: string): P
     return;
   }
 
-  throw new Error(
-    `Email sending is not implemented in production. Tried to send to ${to} with subject "${subject}".`,
-  );
+  logger.warn(`Email service not configured. Would send to ${to}: "${subject}"`);
 }

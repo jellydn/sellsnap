@@ -1,12 +1,10 @@
+import { logger } from "@sellsnap/logger";
 import Stripe from "stripe";
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
-let stripe: Stripe;
 if (!stripeSecretKey) {
-  console.warn("STRIPE_SECRET_KEY not set, Stripe will not work");
-} else {
-  stripe = new Stripe(stripeSecretKey);
+  logger.warn("STRIPE_SECRET_KEY is not set — Stripe payments will not work");
 }
 
-export { stripe };
+export const stripe = new Stripe(stripeSecretKey || "sk_not_configured");
