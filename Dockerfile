@@ -2,7 +2,9 @@ FROM node:20-alpine
 WORKDIR /app
 
 ARG VITE_API_URL
+ARG BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 ENV VITE_API_URL=$VITE_API_URL
+ENV BUILD_DATE=$BUILD_DATE
 ENV NODE_ENV=production
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -20,7 +22,7 @@ RUN cd packages/db && pnpm exec prisma generate
 RUN pnpm -F web build
 RUN cd apps/server && pnpm build
 
-RUN npm install -g serve concurrently
+RUN npm install -g serve concurrently tsx
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 app
@@ -36,4 +38,4 @@ EXPOSE 80 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
 
-CMD ["sh", "-c", "concurrently --kill-others \"serve -s /app/apps/web/dist -l 80\" \"node /app/apps/server/dist/index.js\""]
+CMD ["sh", "-c", "concurrently --kill-others \"serve -s /app/apps/web/dist -l 80\" \"npx tsx /app/apps/server/src/index.ts\""]
