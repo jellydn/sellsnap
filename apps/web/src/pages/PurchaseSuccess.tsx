@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 interface PurchaseData {
   productTitle: string;
-  downloadToken: string;
+  purchased: boolean;
 }
 
 export function PurchaseSuccess() {
@@ -76,19 +76,12 @@ export function PurchaseSuccess() {
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <h2 className="text-lg font-semibold mb-2">Download Your File</h2>
-        <p className="text-sm text-gray-600 mb-4">Your download link will expire in 24 hours.</p>
-        <a
-          href={`/api/download/${purchase.downloadToken}`}
-          className="inline-block py-3 px-6 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg"
-        >
-          Download Now
-        </a>
+        <h2 className="text-lg font-semibold mb-2">Check Your Email</h2>
+        <p className="text-sm text-gray-600">
+          A download link has been sent to your email address. Please check your inbox (and spam
+          folder) for the download link.
+        </p>
       </div>
-
-      <p className="mt-8 text-sm text-gray-500">
-        A confirmation email has been sent with your download link.
-      </p>
     </div>
   );
 }

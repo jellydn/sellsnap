@@ -1,12 +1,14 @@
-import { writeFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { saveFile, saveImage, validateImageFile } from "../upload";
+import { saveFile, saveImage, validateImageFile, validateProductFile } from "../upload";
 
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
   return {
     ...actual,
-    writeFileSync: vi.fn(),
+    createWriteStream: vi.fn(() => {
+      const { PassThrough } = require("node:stream");
+      return new PassThrough();
+    }),
     existsSync: vi.fn(() => true),
     mkdirSync: vi.fn(),
   };
@@ -52,31 +54,53 @@ describe("validateImageFile", () => {
   it("returns null when extension is empty", () => {
     expect(validateImageFile("image/jpeg", "noextension")).toBeNull();
   });
+
+  it("rejects SVG MIME type for security (XSS prevention)", () => {
+    const result = validateImageFile("image/svg+xml", "graphic.svg");
+    expect(result).toContain("Invalid image type");
+    expect(result).toContain("image/svg+xml");
+  });
+
+  it("rejects SVG extension even with valid MIME type", () => {
+    const result = validateImageFile("image/jpeg", "malicious.svg");
+    expect(result).toContain("Invalid image extension");
+    expect(result).toContain(".svg");
+  });
+});
+
+describe("validateProductFile", () => {
+  it("returns null for allowed file types", () => {
+    expect(validateProductFile("document.pdf")).toBeNull();
+    expect(validateProductFile("archive.zip")).toBeNull();
+    expect(validateProductFile("song.mp3")).toBeNull();
+  });
+
+  it("returns error for disallowed file types", () => {
+    const result = validateProductFile("script.exe");
+    expect(result).toContain("File type not allowed");
+    expect(result).toContain(".exe");
+  });
+
+  it("returns null when extension is empty", () => {
+    expect(validateProductFile("noextension")).toBeNull();
+  });
 });
 
 describe("saveImage", () => {
-  it("writes file and returns URL path starting with /uploads/images/", async () => {
+  it("streams file and returns URL path starting with /uploads/images/", async () => {
     const stream = mockFileStream("image-data");
     const result = await saveImage(stream, "photo.jpg");
 
     expect(result).toBe("/uploads/images/test-uuid.jpg");
-    expect(writeFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("test-uuid.jpg"),
-      Buffer.from("image-data"),
-    );
   });
 });
 
 describe("saveFile", () => {
-  it("writes file and returns absolute file path", async () => {
+  it("streams file and returns absolute file path", async () => {
     const stream = mockFileStream("file-data");
     const result = await saveFile(stream, "document.pdf");
 
     expect(result).toContain("test-uuid.pdf");
     expect(result).toContain("files");
-    expect(writeFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("test-uuid.pdf"),
-      Buffer.from("file-data"),
-    );
   });
 });

@@ -1,4 +1,5 @@
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import { logger } from "@sellsnap/logger";
@@ -21,9 +22,13 @@ const server = Fastify({
 });
 
 async function start() {
+  await server.register(helmet, {
+    contentSecurityPolicy: false,
+  });
+
   const allowedOrigins = process.env.CORS_ORIGIN?.split(",").map((o) => o.trim());
   await server.register(cors, {
-    origin: allowedOrigins || true,
+    origin: allowedOrigins || false,
     credentials: true,
   });
 
@@ -31,19 +36,6 @@ async function start() {
     max: 100,
     timeWindow: "1 minute",
   });
-
-  await server.addContentTypeParser(
-    "application/json",
-    { parseAs: "string" },
-    (request, body, done) => {
-      try {
-        request.body = body;
-        done(null, body as object);
-      } catch (err) {
-        done(err as Error, undefined);
-      }
-    },
-  );
 
   await server.register(multipart, {
     limits: {
