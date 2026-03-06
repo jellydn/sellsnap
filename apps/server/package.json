@@ -17,12 +17,14 @@
   "dependencies": {
     "@better-auth/prisma-adapter": "^1.5.3",
     "@fastify/cors": "^11.2.0",
+    "@fastify/helmet": "^13.0.2",
     "@fastify/multipart": "^9.4.0",
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/static": "^9.0.0",
     "@prisma/client": "6.19.2",
     "@sellsnap/logger": "workspace:*",
     "better-auth": "^1.5.3",
+    "db": "workspace:*",
     "fastify": "^5.2.1",
     "stripe": "^20.4.0",
     "zod": "^4.0.0"

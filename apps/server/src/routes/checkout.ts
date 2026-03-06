@@ -15,14 +15,9 @@ export async function checkoutRoutes(server: FastifyInstance): Promise<void> {
       const { productSlug } = request.params as { productSlug: string };
 
       let customerEmail: string | undefined;
-      try {
-        const body = JSON.parse(request.body as string);
-        const parsed = checkoutBodySchema.safeParse(body);
-        if (parsed.success) {
-          customerEmail = parsed.data.customerEmail;
-        }
-      } catch {
-        // Ignore parsing errors, customerEmail is optional
+      const parsed = checkoutBodySchema.safeParse(request.body);
+      if (parsed.success) {
+        customerEmail = parsed.data.customerEmail;
       }
 
       const product = await prisma.product.findUnique({
