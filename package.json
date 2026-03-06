@@ -7,6 +7,9 @@
     "typecheck": "pnpm -r typecheck",
     "typecheck:web": "pnpm --filter web typecheck",
     "typecheck:server": "pnpm --filter server typecheck",
+    "lint": "pnpm -r biome check --write .",
+    "test": "pnpm -r test",
+    "test:watch": "pnpm -r test:watch",
     "db:generate": "dotenv -f .env run -- pnpm --filter db db:generate",
     "db:push": "dotenv -f .env run -- pnpm --filter db db:push",
     "db:migrate": "dotenv -f .env run -- pnpm --filter db db:migrate"

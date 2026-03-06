@@ -24,17 +24,25 @@ typecheck-server:
 build-web:
     cd apps/web && pnpm build
 
-# Lint and format with Biome
+# Lint and format with Biome (web + server)
 lint:
-    cd apps/web && pnpm biome check --write .
+	cd apps/web && pnpm biome check --write .
+	cd apps/server && pnpm biome check --write .
 
-# Run tests (requires Vitest setup)
+# Format only
+format:
+	cd apps/web && pnpm biome format --write .
+	cd apps/server && pnpm biome format --write .
+
+# Run tests (web + server)
 test:
-    cd apps/web && pnpm vitest run
+	cd apps/web && pnpm vitest run
+	cd apps/server && pnpm vitest run
 
-# Run tests watch mode
+# Run tests watch mode (web + server)
 test-watch:
-    cd apps/web && pnpm vitest
+	cd apps/web && pnpm vitest
+	cd apps/server && pnpm vitest
 
 # Run single test file
 test-file file:
