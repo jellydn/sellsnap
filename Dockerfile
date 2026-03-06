@@ -33,12 +33,10 @@ COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.ya
 COPY --from=builder /app/apps/web/dist ./apps/web/dist/
 COPY --from=builder /app/apps/server/dist ./apps/server/dist/
 COPY --from=builder /app/apps/server/package.json ./apps/server/
-COPY --from=builder /app/packages/db/node_modules/.prisma/client ./node_modules/.prisma/client/
-COPY --from=builder /app/packages/db/node_modules/@prisma ./node_modules/@prisma/
+COPY --from=builder /app/node_modules ./node_modules/
+COPY --from=builder /app/packages/db ./packages/db/
 COPY --from=builder /app/packages/logger/src ./packages/logger/src/
 COPY --from=builder /app/packages/logger/package.json ./packages/logger/
-COPY --from=builder /app/node_modules ./node_modules/
-COPY --from=builder /app/apps/server/node_modules ./apps/server/node_modules/
 
 USER app
 
