@@ -1,8 +1,51 @@
 import { randomUUID } from "node:crypto";
+import { existsSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { auth, headersToHeaders } from "../lib/auth";
 import { prisma } from "../lib/prisma";
-import { saveFile, saveImage, validateImageFile } from "../lib/upload";
+import { saveFile, saveImage, validateImageFile, validateProductFile } from "../lib/upload";
+
+const recentViews = new Map<string, number>();
+const VIEW_COOLDOWN_MS = 60_000; // 1 minute per IP per product
+
+const viewCountQueue = new Map<string, number>();
+const VIEW_COUNT_FLUSH_INTERVAL = 10_000; // 10 seconds
+
+async function flushViewCounts(): Promise<void> {
+  if (viewCountQueue.size === 0) return;
+
+  const updates = Array.from(viewCountQueue.entries());
+  viewCountQueue.clear();
+
+  try {
+    await prisma.$transaction(
+      updates.map(([productId, increment]) =>
+        prisma.product.update({
+          where: { id: productId },
+          data: { viewCount: { increment } },
+        }),
+      ),
+    );
+  } catch {
+    for (const [, increment] of updates) {
+      const current = viewCountQueue.get(updates[0][0]) || 0;
+      viewCountQueue.set(updates[0][0], current + increment);
+    }
+  }
+}
+
+setInterval(flushViewCounts, VIEW_COUNT_FLUSH_INTERVAL);
+
+// Clean up old entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamp] of recentViews) {
+    if (now - timestamp > VIEW_COOLDOWN_MS) {
+      recentViews.delete(key);
+    }
+  }
+}, 300_000);
 
 export async function productRoutes(server: FastifyInstance): Promise<void> {
   server.get("/api/products", async (request, reply) => {
@@ -13,6 +56,9 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
     if (!session?.user) {
       return reply.status(401).send({ error: "Unauthorized" });
     }
+
+    const { cursor, limit = 10 } = request.query as { cursor?: string; limit?: number };
+    const take = Math.min(Math.max(1, limit || 10), 100);
 
     const products = await prisma.product.findMany({
       where: { creatorId: session.user.id },
@@ -26,33 +72,44 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
         },
       },
       orderBy: { createdAt: "desc" },
+      take: take + 1,
+      cursor: cursor ? { id: cursor } : undefined,
+      skip: cursor ? 1 : 0,
     });
 
-    return products.map(
-      (product: {
-        id: string;
-        title: string;
-        slug: string;
-        description: string;
-        price: number;
-        coverImageUrl: string | null;
-        published: boolean;
-        viewCount: number;
-        createdAt: Date;
-        _count: { purchases: number };
-      }) => ({
-        id: product.id,
-        title: product.title,
-        slug: product.slug,
-        description: product.description,
-        price: product.price,
-        coverImageUrl: product.coverImageUrl,
-        published: product.published,
-        viewCount: product.viewCount,
-        purchaseCount: product._count.purchases,
-        createdAt: product.createdAt,
-      }),
-    );
+    const hasMore = products.length > take;
+    const items = hasMore ? products.slice(0, -1) : products;
+    const nextCursor = hasMore ? items[items.length - 1]?.id : null;
+
+    return {
+      items: items.map(
+        (product: {
+          id: string;
+          title: string;
+          slug: string;
+          description: string;
+          price: number;
+          coverImageUrl: string | null;
+          published: boolean;
+          viewCount: number;
+          createdAt: Date;
+          _count: { purchases: number };
+        }) => ({
+          id: product.id,
+          title: product.title,
+          slug: product.slug,
+          description: product.description,
+          price: product.price,
+          coverImageUrl: product.coverImageUrl,
+          published: product.published,
+          viewCount: product.viewCount,
+          purchaseCount: product._count.purchases,
+          createdAt: product.createdAt,
+        }),
+      ),
+      nextCursor,
+      hasMore,
+    };
   });
 
   server.get(
@@ -79,21 +136,29 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
         return reply.status(404).send({ error: "Product not found" });
       }
 
-      const updatedProduct = await prisma.product.update({
-        where: { id: product.id },
-        data: { viewCount: { increment: 1 } },
-      });
+      const clientIp =
+        (request.headers["x-forwarded-for"] as string)?.split(",")[0] || request.ip || "unknown";
+      const viewKey = `${product.id}:${clientIp}`;
+      const now = Date.now();
+
+      const lastView = recentViews.get(viewKey);
+      if (!lastView || now - lastView > VIEW_COOLDOWN_MS) {
+        recentViews.set(viewKey, now);
+        viewCountQueue.set(product.id, (viewCountQueue.get(product.id) || 0) + 1);
+      }
+
+      const pendingIncrement = viewCountQueue.get(product.id) || 0;
 
       return {
-        id: updatedProduct.id,
-        title: updatedProduct.title,
-        slug: updatedProduct.slug,
-        description: updatedProduct.description,
-        price: updatedProduct.price,
-        coverImageUrl: updatedProduct.coverImageUrl,
-        previewContent: updatedProduct.previewContent,
-        viewCount: updatedProduct.viewCount,
-        createdAt: updatedProduct.createdAt,
+        id: product.id,
+        title: product.title,
+        slug: product.slug,
+        description: product.description,
+        price: product.price,
+        coverImageUrl: product.coverImageUrl,
+        previewContent: product.previewContent,
+        viewCount: product.viewCount + pendingIncrement,
+        createdAt: product.createdAt,
         creator: {
           id: product.creator.id,
           name: product.creator.name,
@@ -179,6 +244,11 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
         .send({ error: "Missing required fields: title, price, productFile" });
     }
 
+    const fileValidationError = validateProductFile(productFile.filename);
+    if (fileValidationError) {
+      return reply.status(400).send({ error: fileValidationError });
+    }
+
     const price = Math.round(Number.parseFloat(priceStr) * 100);
     if (Number.isNaN(price) || price < 0) {
       return reply.status(400).send({ error: "Invalid price" });
@@ -198,10 +268,23 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
       .slice(0, 50);
 
     let slug = baseSlug;
-    let slugSuffix = 0;
-    while (await prisma.product.findUnique({ where: { slug } })) {
-      slugSuffix++;
-      slug = `${baseSlug}-${slugSuffix}`;
+    const existingWithBaseSlug = await prisma.product.findUnique({
+      where: { slug: baseSlug },
+    });
+
+    if (existingWithBaseSlug) {
+      const lastSimilar = await prisma.product.findFirst({
+        where: { slug: { startsWith: `${baseSlug}-` } },
+        orderBy: { slug: "desc" },
+      });
+
+      if (lastSimilar) {
+        const match = lastSimilar.slug.match(/^.+-(\d+)$/);
+        const lastNum = match ? parseInt(match[1], 10) : 0;
+        slug = `${baseSlug}-${lastNum + 1}`;
+      } else {
+        slug = `${baseSlug}-1`;
+      }
     }
 
     let coverImageUrl: string | null = null;
@@ -370,6 +453,10 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
 
     let filePath = existingProduct.filePath;
     if (productFile) {
+      const fileValidationError = validateProductFile(productFile.filename);
+      if (fileValidationError) {
+        return reply.status(400).send({ error: fileValidationError });
+      }
       filePath = await saveFile(productFile.file, productFile.filename);
     }
     if (productFile !== null || fields.productFile !== undefined) {
@@ -430,5 +517,47 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
       slug: updatedProduct.slug,
       published: updatedProduct.published,
     };
+  });
+
+  server.delete("/api/products/:id", async (request, reply) => {
+    const session = await auth.api.getSession({
+      headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),
+    });
+
+    if (!session?.user) {
+      return reply.status(401).send({ error: "Unauthorized" });
+    }
+
+    const { id } = request.params as { id: string };
+
+    const product = await prisma.product.findUnique({
+      where: { id },
+    });
+
+    if (!product) {
+      return reply.status(404).send({ error: "Product not found" });
+    }
+
+    if (product.creatorId !== session.user.id) {
+      return reply.status(403).send({ error: "Forbidden" });
+    }
+
+    if (product.filePath && existsSync(product.filePath)) {
+      try {
+        unlinkSync(product.filePath);
+      } catch {}
+    }
+    if (product.coverImageUrl) {
+      const imagePath = join(process.cwd(), product.coverImageUrl.replace(/^\//, ""));
+      if (existsSync(imagePath)) {
+        try {
+          unlinkSync(imagePath);
+        } catch {}
+      }
+    }
+
+    await prisma.product.delete({ where: { id } });
+
+    return reply.status(204).send();
   });
 }

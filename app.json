@@ -1,0 +1,35 @@
+{
+  "name": "sellsnap",
+  "description": "SellSnap - Digital products marketplace",
+  "repository": "https://github.com/jellydn/sellsnap",
+  "website": "https://sellsnap.example.com",
+  "keywords": [
+    "ecommerce",
+    "digital-products",
+    "marketplace"
+  ],
+  "stack": "heroku-24",
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic",
+      "healthcheck": {
+        "command": "wget --no-verbose --tries=1 --spider http://localhost/",
+        "interval": 30,
+        "timeout": 3,
+        "startPeriod": 5,
+        "retries": 3
+      }
+    }
+  },
+  "env": {
+    "NODE_ENV": {
+      "description": "Node environment",
+      "value": "production"
+    },
+    "PORT": {
+      "description": "Server port",
+      "value": "3000"
+    }
+  }
+}

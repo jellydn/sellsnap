@@ -1,12 +1,23 @@
 import { randomUUID } from "node:crypto";
 import { logger } from "@sellsnap/logger";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type Stripe from "stripe";
 import { sendEmail } from "../lib/email";
 import { prisma } from "../lib/prisma";
 import { stripe } from "../lib/stripe";
 
+async function parseRawBody(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
+  const rawParts: Buffer[] = [];
+  for await (const chunk of request.raw) {
+    rawParts.push(chunk);
+  }
+  (request as FastifyRequest & { rawBody: string }).rawBody =
+    Buffer.concat(rawParts).toString("utf-8");
+}
+
 export async function webhookRoutes(server: FastifyInstance): Promise<void> {
+  server.addHook("preParsing", parseRawBody);
+
   server.post("/api/webhooks/stripe", async (request, reply) => {
     const sig = request.headers["stripe-signature"] as string;
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -18,7 +29,7 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
     let event: Stripe.Event;
 
     try {
-      const rawBody = request.body as string;
+      const rawBody = (request as FastifyRequest & { rawBody: string }).rawBody;
       event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
     } catch (err) {
       logger.error("Webhook signature verification failed:", err);
