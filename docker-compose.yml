@@ -6,29 +6,12 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        - VITE_API_URL=http://server:3000
+        - VITE_API_URL=http://localhost
     ports:
       - "80:80"
     environment:
-      - VITE_API_URL=http://server:3000
-    depends_on:
-      - server
-    networks:
-      - sellsnap
-
-  server:
-    build:
-      context: .
-      dockerfile: Dockerfile.server
-    ports:
-      - "3000:3000"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost}
-      - NODE_ENV=production
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-dev-secret-change-in-production}
+      - DATABASE_URL=postgresql://sellsnap:sellsnap@db:5432/sellsnap
+      - BETTER_AUTH_SECRET=dev-secret-change-in-production-minimum-32-chars
     depends_on:
       db:
         condition: service_healthy
@@ -38,13 +21,13 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      - POSTGRES_USER=${POSTGRES_USER:-sellsnap}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-sellsnap}
-      - POSTGRES_DB=${POSTGRES_DB:-sellsnap}
+      - POSTGRES_USER=sellsnap
+      - POSTGRES_PASSWORD=sellsnap
+      - POSTGRES_DB=sellsnap
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sellsnap}"]
+      test: ["CMD-SHELL", "pg_isready -U sellsnap"]
       interval: 5s
       timeout: 5s
       retries: 5

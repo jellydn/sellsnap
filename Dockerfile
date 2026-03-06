@@ -15,17 +15,18 @@ RUN pnpm install --force
 
 RUN cd /app/packages/db && pnpm exec prisma generate
 
-RUN pnpm -F server build
-
 RUN pnpm -F web build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
 
-RUN npm install -g serve
+RUN npm install -g serve tsx concurrently
 
-COPY --from=builder /app/apps/web/dist /app/dist
+COPY --from=builder /app /app
+
+ENV NODE_ENV=production
+ENV BETTER_AUTH_SECRET=dev-secret-change-in-production-minimum-32-chars
 
 EXPOSE 80
 
-CMD ["serve", "-s", "/app/dist", "-l", "80"]
+CMD ["sh", "-c", "concurrently --kill-others \"serve -s /app/apps/web/dist -l 80\" \"tsx /app/apps/server/src/index.ts\""]
