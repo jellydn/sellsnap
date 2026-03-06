@@ -22,7 +22,7 @@ RUN cd apps/server && pnpm build
 
 FROM base AS runner
 
-RUN npm install -g serve
+RUN npm install -g serve concurrently
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 app
