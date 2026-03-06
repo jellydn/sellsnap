@@ -1,62 +1,44 @@
 # AGENTS.md - Agent Coding Guidelines
 
-This file provides guidelines for AI agents working on the SellSnap codebase.
-
-## Project Overview
-
-SellSnap is a monorepo for selling digital products online.
+SellSnap is a monorepo for selling digital products online (React + Fastify + Prisma + PostgreSQL).
 
 ```
 apps/
-  web/          # React (Vite) frontend
-  server/       # Fastify API server
+  web/     # React (Vite) frontend
+  server/  # Fastify API server
 packages/
-  db/           # Prisma schema & client
+  db/      # Prisma schema & client
 ```
 
-Tech stack: React 18, Vite, TypeScript (strict), Tailwind CSS, Prisma, PostgreSQL, Fastify, better-auth, Stripe.
+Tech stack: React 19, Vite, TypeScript (strict), Tailwind CSS v4, Prisma, Fastify, better-auth, Stripe.
 
 ---
 
 ## Build / Development Commands
 
-This project uses `pnpm` as the package manager. Use `just` CLI for shortcuts.
-
-### Using just (recommended)
+Uses `pnpm` as package manager. Prefer `just` CLI for shortcuts.
 
 ```bash
-just install           # Install dependencies
+# Install & run
+just install           # pnpm install
 just dev               # Start all dev servers (web + server)
-just typecheck          # Type check all packages
-just typecheck-web      # Type check web only
-just typecheck-server   # Type check server only
+
+# Type checking
+just typecheck         # Type check all packages
+just typecheck-web     # Web only
+just typecheck-server  # Server only
+
+# Build & lint
 just build-web         # Build web app
-just lint               # Lint and format (Biome)
-just test               # Run all tests
-just test-watch         # Watch mode
-just test-file <file>   # Run single test file
-```
+just lint              # Biome lint + format (apps/web & apps/server)
 
-### Using pnpm directly
+# Testing
+just test              # Run all tests
+just test-watch        # Watch mode
+just test-file <file>  # Run single test file (e.g., src/components/__tests__/MyComponent.test.tsx)
 
-```bash
-pnpm install
-pnpm dev
-pnpm typecheck
-cd apps/web && pnpm build
-```
-
-### Running a Single Test
-
-```bash
-# Using just (recommended)
-just test-file src/components/__tests__/MyComponent.test.tsx
-
-# Using pnpm/vitest directly
+# Alternative: pnpm directly
 cd apps/web && pnpm vitest run src/components/__tests__/MyComponent.test.tsx
-
-# Watch mode
-cd apps/web && pnpm vitest src/components/__tests__/MyComponent.test.tsx
 ```
 
 ---
@@ -69,11 +51,7 @@ cd apps/web && pnpm vitest src/components/__tests__/MyComponent.test.tsx
 - Use `type` for unions, `interface` for object shapes
 - Prefer explicit return types for exported functions
 
-### Imports
-
-- Use path aliases (`@/` configured in web)
-- Order: external → internal → relative
-- Use named exports over default
+### Imports (order: external → internal → relative)
 
 ```typescript
 import { useState } from "react";
@@ -81,6 +59,9 @@ import { Button } from "@/components/ui/button";
 import { formatPrice } from "../utils/format";
 import { type User } from "@/types/user";
 ```
+
+- Use path aliases (`@/` configured in web)
+- Use named exports over default
 
 ### Naming Conventions
 
@@ -109,50 +90,46 @@ async function fetchUser(id: string): Promise<Result<User>> {
     const user = await db.user.findUnique({ where: { id } });
     if (!user) return { success: false, error: "User not found" };
     return { success: true, data: user };
-  } catch (e) {
+  } catch {
     return { success: false, error: "Failed to fetch user" };
   }
 }
 ```
 
-### Testing
+### Testing (Vitest + @testing-library/react)
 
-- Use Vitest for unit and integration tests
 - Follow AAA pattern: Arrange, Act, Assert
 - Test behavior, not implementation details
-- Use `@testing-library/react` for component tests
 
 ```typescript
 test("should increment counter when button is clicked", () => {
   render(<Counter />);
   const button = screen.getByRole("button", { name: /increment/i });
-
   fireEvent.click(button);
-
   expect(screen.getByTestId("counter-value")).toHaveTextContent("1");
 });
 ```
 
-### Database / Prisma
+---
+
+## Database / Prisma
 
 - Use Prisma client for all database operations
 - Name migrations descriptively: `just prisma-migrate add_product_slug`
 - Use transactions for multi-step operations
-- Environment variables: `DATABASE_URL` (required), check `.env.example` for others
+- Required env vars: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `DATABASE_AUTH_TOKEN`
 
-### API Design (Fastify)
+---
+
+## API Design (Fastify)
 
 - Use typed request/response schemas
 - Return consistent response format
 - Validate inputs using Fastify schema validation
 
-### Environment Variables
+---
 
-- Never commit secrets - use `.env` files
-- Copy from `.env.example` for required variables
-- Server requires: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `DATABASE_AUTH_TOKEN`
-
-### CSS / Styling
+## CSS / Styling
 
 - Use Tailwind CSS v4
 - Keep custom CSS minimal
@@ -162,24 +139,15 @@ test("should increment counter when button is clicked", () => {
 
 ## Linting & Formatting
 
-Uses Biome (configured in `apps/web/biome.json` and `apps/server/biome.json`):
+Biome is configured in `apps/web/biome.json` and `apps/server/biome.json`.
 
 ```bash
-# Run on web
+just lint              # Runs on both web and server
 cd apps/web && bun x biome check --write .
-
-# Run on server
 cd apps/server && bun x biome check --write .
-
-# Or use just
-just lint
 ```
 
-Pre-commit hooks run automatically on commit (via prek, uses bun):
-
-```bash
-prek run --all-files
-```
+Pre-commit hooks run automatically on commit (via prek).
 
 ---
 
