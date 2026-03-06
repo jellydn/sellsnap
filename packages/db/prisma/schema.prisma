@@ -35,6 +35,8 @@ model Product {
   updatedAt      DateTime @updatedAt
 
   purchases Purchase[]
+
+  @@index([creatorId])
 }
 
 model Purchase {
@@ -50,4 +52,8 @@ model Purchase {
   downloadToken        String   @unique
   downloadExpiresAt    DateTime
   createdAt            DateTime @default(now())
+
+  @@index([productId])
+  @@index([customerEmail])
+  @@index([stripeSessionId])
 }
