@@ -1,10 +1,9 @@
-FROM node:20-alpine AS base
+FROM node:20-alpine
 WORKDIR /app
 
-FROM base AS builder
 ARG VITE_API_URL
-ARG CACHE_DATE=$(date +%Y%m%d)
 ENV VITE_API_URL=$VITE_API_URL
+ENV NODE_ENV=production
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/
@@ -21,8 +20,6 @@ RUN cd packages/db && pnpm exec prisma generate
 RUN pnpm -F web build
 RUN cd apps/server && pnpm build
 
-FROM base AS runner
-
 RUN npm install -g serve concurrently
 
 RUN addgroup --system --gid 1001 nodejs && \
@@ -30,18 +27,8 @@ RUN addgroup --system --gid 1001 nodejs && \
 
 RUN mkdir -p /app/uploads/images /app/uploads/files && chown -R app:nodejs /app/uploads
 
-COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
-COPY --from=builder /app/apps/web/dist ./apps/web/dist/
-COPY --from=builder /app/apps/server/dist ./apps/server/dist/
-COPY --from=builder /app/apps/server/package.json ./apps/server/
-COPY --from=builder /app/node_modules ./node_modules/
-COPY --from=builder /app/packages/db ./packages/db/
-COPY --from=builder /app/packages/logger/src ./packages/logger/src/
-COPY --from=builder /app/packages/logger/package.json ./packages/logger/
-
 USER app
 
-ENV NODE_ENV=production
 ENV PORT=3000
 
 EXPOSE 80 3000
