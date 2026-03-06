@@ -11,6 +11,18 @@ import { Settings } from "./pages/Settings";
 import { SignIn } from "./pages/SignIn";
 import { SignUp } from "./pages/SignUp";
 
+function NotFound() {
+  return (
+    <div style={{ padding: "2rem", textAlign: "center" }}>
+      <h1 style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "1rem" }}>404</h1>
+      <p style={{ color: "#6b7280", marginBottom: "1rem" }}>Page not found</p>
+      <a href="/" style={{ color: "#2563eb", textDecoration: "none" }}>
+        Go home
+      </a>
+    </div>
+  );
+}
+
 function Home() {
   return (
     <div style={{ padding: "2rem", fontFamily: "system-ui" }}>
@@ -62,6 +74,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </AppLayout>
   );

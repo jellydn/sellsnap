@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { formatPrice } from "../lib/format";
 
 interface CreatorProduct {
   id: string;
@@ -16,10 +17,6 @@ interface CreatorData {
   slug: string;
   avatarUrl: string | null;
   products: CreatorProduct[];
-}
-
-function formatPrice(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
 }
 
 export function CreatorProfile() {

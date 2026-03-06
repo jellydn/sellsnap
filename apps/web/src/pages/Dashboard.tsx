@@ -1,10 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchAnalytics, fetchProducts, type Product } from "../lib/api";
-
-function formatPrice(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
-}
+import { formatPrice } from "../lib/format";
 
 interface AnalyticsData {
   products: Array<{

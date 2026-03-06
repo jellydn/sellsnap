@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { createCheckoutSession } from "../lib/api";
+import { formatPrice } from "../lib/format";
 
 interface ProductData {
   id: string;
@@ -18,10 +19,6 @@ interface ProductData {
     slug: string;
     avatarUrl: string | null;
   };
-}
-
-function formatPrice(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
 }
 
 export function ProductPage() {
