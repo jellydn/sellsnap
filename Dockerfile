@@ -3,6 +3,7 @@ WORKDIR /app
 
 FROM base AS builder
 ARG VITE_API_URL
+ARG CACHE_DATE=$(date +%Y%m%d)
 ENV VITE_API_URL=$VITE_API_URL
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
