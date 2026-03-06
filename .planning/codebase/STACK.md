@@ -1,88 +1,132 @@
 # Technology Stack
 
-**Analysis Date:** 2026-03-05
+**Analysis Date:** 2026-03-06
 
 ## Languages
 
-**Primary:**
-- TypeScript 5.x - Web app (`apps/web/`), Server (`apps/server/`), Database (`packages/db/`)
+| Language   | Version / Target | Usage                              |
+| ---------- | ---------------- | ---------------------------------- |
+| TypeScript | ^5.7.2 (strict)  | All application and package code   |
+| SQL        | —                | Prisma migrations                  |
+| CSS        | Tailwind v4      | Styling (utility-first)            |
+| HTML       | —                | Single `index.html` SPA entry      |
 
-**Secondary:**
-- TSX - React components and pages
-- CSS - Tailwind CSS classes (inline in components)
-- Prisma Schema - Database schema definitions
+- **TS target:** ES2022, module ESNext, `moduleResolution: "bundler"`
+- Shared base tsconfig at `packages/tsconfig/base.json`; each app extends it with `composite: true`
 
 ## Runtime
 
-**Environment:**
-- Node.js (for server and build tooling)
-- Browser (for web app client)
+| Runtime  | Version   | Context                                      |
+| -------- | --------- | -------------------------------------------- |
+| Node.js  | 20-alpine | Production (Docker images)                   |
+| tsx      | ^4.19.2   | Dev server (`tsx watch`) & production runner  |
+| Vite     | ^6.0.7    | Web dev server & build tool                  |
 
-**Package Manager:**
-- pnpm 9.x
-- Lockfile: `pnpm-lock.yaml` (present)
+- Server runs via `tsx watch` in dev, `npx tsx` in Docker production
+- Web served via `serve -s` (Dockerfile) or Vite dev server (port 5173)
 
 ## Frameworks
 
-**Core:**
-- React 19.0.0 - UI framework for web app
-- React Router 7.1.3 - Client-side routing
-- Fastify 5.2.0 - Backend API server
-- Vite 6.0.1 - Build tool and dev server
+### Frontend (`apps/web/`)
 
-**Testing:**
-- Vitest 3.0.5 - Test runner (configured but no tests written)
+| Framework        | Version  | Role                  |
+| ---------------- | -------- | --------------------- |
+| React            | ^19.0.0  | UI library            |
+| React DOM        | ^19.0.0  | DOM rendering         |
+| React Router DOM | ^7.1.1   | Client-side routing   |
+| Tailwind CSS     | ^4.2.1   | Utility-first CSS     |
+| Vite             | ^6.0.7   | Build tool & dev server |
 
-**Build/Dev:**
-- TypeScript 5.7.3 - Type checking
-- Biome 2.4.5 - Linting and formatting
-- Prisma 6.1.0 - ORM and database toolkit
-- Tailwind CSS 4.x - Styling framework
+- Vite plugins: `@vitejs/plugin-react`, `@tailwindcss/vite`
+- Dev proxy: `/api` → `http://localhost:3000`
+- Path alias: `@/` → `./src/`
+
+### Backend (`apps/server/`)
+
+| Framework            | Version  | Role                        |
+| -------------------- | -------- | --------------------------- |
+| Fastify              | ^5.2.1   | HTTP framework              |
+| @fastify/cors        | ^11.2.0  | CORS support                |
+| @fastify/multipart   | ^9.4.0   | File upload handling        |
+| @fastify/rate-limit  | ^10.3.0  | API rate limiting           |
+| @fastify/static      | ^9.0.0   | Static file serving (uploads) |
+| Zod                  | ^4.0.0   | Request validation          |
+
+- Server listens on port 3000
+- Modular route structure: `routes/*.ts` registered as Fastify plugins
+- Shared logic in `lib/` (auth, stripe, prisma, upload, email)
 
 ## Key Dependencies
 
-**Critical:**
-- better-auth 1.1.1 - Authentication library with session management
-- @prisma/client 6.1.0 - Database ORM client
-- stripe 17.6.0 - Payment processing
-- react 19.0.0 - Core UI library
-- react-router-dom 7.1.3 - Client routing
+### Shared Packages (internal)
 
-**Infrastructure:**
-- @fastify/cors 10.0.1 - CORS handling
-- @fastify/multipart 9.0.1 - File upload handling
-- @fastify/rate-limit 10.2.1 - Rate limiting
-- @fastify/static 7.0.4 - Static file serving
-- @tanstack/react-query 5.62.11 - Server state management
-- tailwindcss 4.1.11 - Utility-first CSS
+| Package            | Path               | Purpose                          |
+| ------------------ | ------------------ | -------------------------------- |
+| `db`               | `packages/db/`     | Prisma schema & generated client |
+| `@sellsnap/logger` | `packages/logger/` | Logging via consola              |
+| `packages/tsconfig`| `packages/tsconfig/` | Shared TypeScript base config  |
+
+### External Libraries
+
+| Library                   | Version  | App    | Purpose                         |
+| ------------------------- | -------- | ------ | ------------------------------- |
+| better-auth               | ^1.5.3   | Both   | Authentication framework        |
+| @better-auth/prisma-adapter | ^1.5.3 | Server | Prisma adapter for better-auth  |
+| @better-fetch/fetch       | ^1.1.21  | Web    | Typed fetch client              |
+| stripe                    | ^20.4.0  | Server | Payment processing              |
+| @prisma/client            | ^6.19.2  | Server | Database ORM client             |
+| consola                   | ^3.4.0   | Logger | Structured console logging      |
+
+### Dev Tooling
+
+| Tool                     | Version  | Purpose                      |
+| ------------------------ | -------- | ---------------------------- |
+| Biome                    | ^2.4.5   | Linting & formatting         |
+| Vitest                   | ^4.0.18  | Unit/integration testing     |
+| @testing-library/react   | ^16.3.2  | React component testing      |
+| @testing-library/jest-dom | ^6.9.1  | DOM assertion matchers       |
+| jsdom                    | ^28.1.0  | Test environment (web)       |
+| PostCSS                  | ^8.5.8   | CSS processing               |
+| Autoprefixer             | ^10.4.27 | CSS vendor prefixes          |
 
 ## Configuration
 
-**Environment:**
-- `.env` files in each app directory
-- `.env.example` in `apps/server/`
-- Environment variables via `process.env`
-
-**Build:**
-- `apps/web/vite.config.ts` - Vite configuration with proxy to server
-- `apps/web/tsconfig.json` - TypeScript config for web
-- `apps/server/tsconfig.json` - TypeScript config for server
-- `packages/tsconfig/base.json` - Shared TypeScript base config
-- `apps/web/biome.json` - Biome linting config (2 spaces, 100 char width)
-- `apps/server/biome.json` - Biome linting config
+| Config File                      | Tool              |
+| -------------------------------- | ----------------- |
+| `apps/web/vite.config.ts`        | Vite + React + Tailwind plugins |
+| `apps/web/vitest.config.ts`      | Vitest (jsdom env, globals, `@/` alias) |
+| `apps/server/vitest.config.ts`   | Vitest (globals, mock env vars) |
+| `apps/web/biome.json`            | Biome (space indent, 100 line width) |
+| `apps/server/biome.json`         | Biome (space indent, 100 line width) |
+| `packages/tsconfig/base.json`    | Shared TS config (ES2022, strict) |
+| `apps/web/tsconfig.json`         | Web TS (JSX react-jsx, path alias) |
+| `apps/server/tsconfig.json`      | Server TS (composite, skipLibCheck) |
+| `.pre-commit-config.yaml`        | Pre-commit hooks (Biome via bun) |
+| `justfile`                       | Task runner shortcuts |
 
 ## Platform Requirements
 
-**Development:**
-- Node.js 18+ (required by pnpm workspace)
-- pnpm 9.x
-- PostgreSQL database (for Prisma)
+### Package Management
 
-**Production:**
-- Vercel (configured for deployment)
-- PostgreSQL database (Vercel Postgres or external)
-- Stripe account (for payments)
+- **pnpm** v10.30.3 (workspace protocol for internal packages)
+- Workspace: `apps/*`, `packages/*`
 
----
+### Containerization
 
-*Stack analysis: 2026-03-05*
+| File               | Purpose                                    |
+| ------------------ | ------------------------------------------ |
+| `Dockerfile`       | Combined web+server (Node 20-alpine, `serve` + `tsx`, port 80) |
+| `Dockerfile.server`| Server-only (Node 20-alpine, `tsx`, port 3000, non-root user) |
+| `docker-compose.yml` | Full stack: web+server + PostgreSQL 16-alpine |
+| `nginx.conf`       | SPA fallback config (unused in current Docker setup) |
+
+### Database
+
+- PostgreSQL 16 (Alpine) via Docker
+- Prisma ORM with migration support
+- Volume: `postgres_data` for persistence
+
+### Node.js Version
+
+- **Node 20** (specified in Docker images)
+- ES module system (`"type": "module"` in apps)
