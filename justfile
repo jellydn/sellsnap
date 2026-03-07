@@ -57,3 +57,11 @@ prisma-generate:
 
 prisma-push:
     cd apps/server && pnpm prisma db push
+
+# E2E tests (requires dev servers running or starts them automatically)
+e2e:
+    pnpm exec playwright test
+
+# E2E tests with UI
+e2e-ui:
+    pnpm exec playwright test --ui

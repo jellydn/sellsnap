@@ -15,6 +15,7 @@
     "db:migrate": "dotenv -f .env run -- pnpm --filter db db:migrate"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "typescript": "^5.7.2"
   },
   "packageManager": "pnpm@10.30.3",
