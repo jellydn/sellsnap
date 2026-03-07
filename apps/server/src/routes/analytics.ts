@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { auth, headersToHeaders } from "../lib/auth";
+import { PURCHASE_STATUS } from "../lib/constants";
 import { prisma } from "../lib/prisma";
 
 export async function analyticsRoutes(server: FastifyInstance): Promise<void> {
@@ -18,7 +19,7 @@ export async function analyticsRoutes(server: FastifyInstance): Promise<void> {
         _count: {
           select: {
             purchases: {
-              where: { status: "completed" },
+              where: { status: PURCHASE_STATUS.COMPLETED },
             },
           },
         },
@@ -29,7 +30,7 @@ export async function analyticsRoutes(server: FastifyInstance): Promise<void> {
       by: ["productId"],
       where: {
         product: { creatorId: session.user.id },
-        status: "completed",
+        status: PURCHASE_STATUS.COMPLETED,
       },
       _sum: { amount: true },
     });

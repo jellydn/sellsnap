@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { paginate, parseLimit } from "../lib/pagination";
 import { prisma } from "../lib/prisma";
 
 export async function creatorRoutes(server: FastifyInstance): Promise<void> {
@@ -8,7 +9,7 @@ export async function creatorRoutes(server: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const { slug } = request.params as { slug: string };
       const { cursor, limit = 10 } = request.query as { cursor?: string; limit?: number };
-      const take = Math.min(Math.max(1, limit || 10), 50);
+      const take = parseLimit(limit, 50);
 
       const creator = await prisma.user.findUnique({
         where: { slug },
@@ -37,9 +38,7 @@ export async function creatorRoutes(server: FastifyInstance): Promise<void> {
         skip: cursor ? 1 : 0,
       });
 
-      const hasMore = products.length > take;
-      const items = hasMore ? products.slice(0, -1) : products;
-      const nextCursor = hasMore ? items[items.length - 1]?.id : null;
+      const { items, nextCursor, hasMore } = paginate(products, take);
 
       return {
         id: creator.id,
@@ -47,23 +46,7 @@ export async function creatorRoutes(server: FastifyInstance): Promise<void> {
         slug: creator.slug,
         avatarUrl: creator.avatarUrl,
         products: {
-          items: items.map(
-            (p: {
-              id: string;
-              title: string;
-              slug: string;
-              price: number;
-              coverImageUrl: string | null;
-              createdAt: Date;
-            }) => ({
-              id: p.id,
-              title: p.title,
-              slug: p.slug,
-              price: p.price,
-              coverImageUrl: p.coverImageUrl,
-              createdAt: p.createdAt,
-            }),
-          ),
+          items,
           nextCursor,
           hasMore,
         },

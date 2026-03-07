@@ -1,7 +1,8 @@
 import { createReadStream, existsSync } from "node:fs";
 import { extname } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { auth, headersToHeaders } from "../lib/auth";
+import { getSessionFromRequest } from "../lib/auth";
+import { PURCHASE_STATUS } from "../lib/constants";
 import { prisma } from "../lib/prisma";
 
 function sanitizeFilename(name: string): string {
@@ -10,10 +11,7 @@ function sanitizeFilename(name: string): string {
 
 export async function purchaseRoutes(server: FastifyInstance): Promise<void> {
   server.get("/api/purchases/by-session/:sessionId", async (request, reply) => {
-    const session = await auth.api.getSession({
-      headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),
-    });
-
+    const session = await getSessionFromRequest(request);
     if (!session?.user) {
       return reply.status(401).send({ error: "Unauthorized" });
     }
@@ -24,7 +22,7 @@ export async function purchaseRoutes(server: FastifyInstance): Promise<void> {
       where: {
         stripeSessionId: sessionId,
         customerEmail: session.user.email,
-        status: "completed",
+        status: PURCHASE_STATUS.COMPLETED,
       },
       include: {
         product: {

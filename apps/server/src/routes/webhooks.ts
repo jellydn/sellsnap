@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { logger } from "@sellsnap/logger";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type Stripe from "stripe";
+import { PURCHASE_STATUS } from "../lib/constants";
 import { sendEmail } from "../lib/email";
 import { prisma } from "../lib/prisma";
 import { stripe } from "../lib/stripe";
@@ -38,7 +39,6 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
 
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
-
       const productId = session.metadata?.productId;
       const customerEmail = session.customer_email;
 
@@ -46,9 +46,6 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
         logger.error("Missing metadata in webhook event");
         return reply.status(400).send({ error: "Missing metadata" });
       }
-
-      const downloadToken = randomUUID();
-      const downloadExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
       const product = await prisma.product.findUnique({
         where: { id: productId },
@@ -67,18 +64,23 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
         return reply.status(200).send({ received: true });
       }
 
+      const downloadToken = randomUUID();
+      const downloadExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      const stripePaymentIntentId =
+        typeof session.payment_intent === "string"
+          ? session.payment_intent
+          : (session.payment_intent?.id ?? "");
+
       await prisma.purchase.create({
         data: {
           productId,
           customerEmail,
           customerName: session.customer_details?.name || null,
-          stripePaymentIntentId:
-            typeof session.payment_intent === "string"
-              ? session.payment_intent
-              : (session.payment_intent?.id ?? ""),
+          stripePaymentIntentId,
           stripeSessionId: session.id as string,
           amount: session.amount_total || 0,
-          status: "completed",
+          status: PURCHASE_STATUS.COMPLETED,
           downloadToken,
           downloadExpiresAt,
         },
