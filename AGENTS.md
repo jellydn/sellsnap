@@ -1,6 +1,6 @@
 # AGENTS.md - Agent Coding Guidelines
 
-SellSnap is a monorepo for selling digital products online (React + Fastify + Prisma + PostgreSQL).
+SellSnap monorepo for selling digital products (React + Fastify + Prisma + PostgreSQL).
 
 ```
 apps/
@@ -8,20 +8,21 @@ apps/
   server/  # Fastify API server
 packages/
   db/      # Prisma schema & client
+  logger/  # Logging utility
 ```
 
-Tech stack: React 19, Vite, TypeScript (strict), Tailwind CSS v4, Prisma, Fastify, better-auth, Stripe.
+Tech stack: React 19, Vite, TypeScript (strict), Tailwind CSS v4, Prisma, Fastify, better-auth, Stripe, Zod.
 
 ---
 
 ## Build / Development Commands
 
-Uses `pnpm` as package manager. Prefer `just` CLI for shortcuts.
+Uses `pnpm`. Prefer `just` CLI for shortcuts.
 
 ```bash
 # Install & run
 just install           # pnpm install
-just dev               # Start all dev servers (web + server)
+just dev               # Start all dev servers
 
 # Type checking
 just typecheck         # Type check all packages
@@ -30,16 +31,27 @@ just typecheck-server  # Server only
 
 # Build & lint
 just build-web         # Build web app
-just lint              # Biome lint + format (apps/web & apps/server)
+just lint              # Biome lint + format
+just format            # Biome format only
 
 # Testing
-just test              # Run all tests
+just test              # Run all tests (web + server)
 just test-watch        # Watch mode
-just test-file <file>  # Run single test file (e.g., src/components/__tests__/MyComponent.test.tsx)
+just test-file <file>  # Single test file (e.g., src/components/__tests__/My.test.tsx)
+cd apps/web && pnpm vitest run                    # Web tests only
+cd apps/server && pnpm vitest run                 # Server tests only
 
-# Alternative: pnpm directly
-cd apps/web && pnpm vitest run src/components/__tests__/MyComponent.test.tsx
+# E2E Testing
+just e2e               # Run Playwright tests
+just e2e-ui           # Run Playwright with UI
+
+# Prisma / Database
+just prisma-migrate <name>   # Create migration
+just prisma-generate          # Generate Prisma client
+just prisma-push              # Push schema to DB
 ```
+
+**Required env vars**: `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `STRIPE_KEY`, `STRIPE_WEBHOOK_SECRET`
 
 ---
 
@@ -69,6 +81,7 @@ import { type User } from "@/types/user";
 - Variables/functions: camelCase
 - Components: PascalCase
 - Constants: SCREAMING_SNAKE_CASE
+- Test files: `*.test.ts` or `*.test.tsx` in `__tests__` folders
 
 ### React Conventions
 
@@ -96,36 +109,25 @@ async function fetchUser(id: string): Promise<Result<User>> {
 }
 ```
 
-### Testing (Vitest + @testing-library/react)
+### Fastify API Patterns
+
+- Use Zod for validation, define schemas separately from routes
+
+---
+
+## Testing (Vitest + @testing-library/react)
 
 - Follow AAA pattern: Arrange, Act, Assert
 - Test behavior, not implementation details
-
-```typescript
-test("should increment counter when button is clicked", () => {
-  render(<Counter />);
-  const button = screen.getByRole("button", { name: /increment/i });
-  fireEvent.click(button);
-  expect(screen.getByTestId("counter-value")).toHaveTextContent("1");
-});
-```
+- Use `describe` blocks to group related tests
 
 ---
 
 ## Database / Prisma
 
-- Use Prisma client for all database operations
+- Use Prisma client: `import { db } from "db"`
 - Name migrations descriptively: `just prisma-migrate add_product_slug`
 - Use transactions for multi-step operations
-- Required env vars: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `DATABASE_AUTH_TOKEN`
-
----
-
-## API Design (Fastify)
-
-- Use typed request/response schemas
-- Return consistent response format
-- Validate inputs using Fastify schema validation
 
 ---
 
@@ -133,7 +135,7 @@ test("should increment counter when button is clicked", () => {
 
 - Use Tailwind CSS v4
 - Keep custom CSS minimal
-- Use utility classes
+- Configure in `apps/web/src/index.css` with `@import "tailwindcss"`
 
 ---
 
@@ -143,8 +145,7 @@ Biome is configured in `apps/web/biome.json` and `apps/server/biome.json`.
 
 ```bash
 just lint              # Runs on both web and server
-cd apps/web && bun x biome check --write .
-cd apps/server && bun x biome check --write .
+just format            # Format only
 ```
 
 Pre-commit hooks run automatically on commit (via prek).
@@ -154,4 +155,5 @@ Pre-commit hooks run automatically on commit (via prek).
 ## Git Conventions
 
 - Use clear commit messages
-- Run `pnpm typecheck` before committing
+- Run `just typecheck` before committing
+- Separate tidying from behavior changes

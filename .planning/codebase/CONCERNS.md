@@ -282,18 +282,22 @@
 
 ## Summary
 
-**Fixed (26 items):** TD-1, TD-3, TD-4, TD-5, TD-7, TD-8, BUG-1, BUG-2, BUG-3, BUG-4, BUG-6, SEC-1, SEC-3, SEC-4, SEC-5, SEC-6, SEC-7, SEC-8, PERF-1, PERF-2, PERF-3, PERF-4, FRAG-2, FRAG-3, FRAG-4, SCALE-2, SCALE-3, SCALE-4, DEP-2, DEP-3, DEP-4, MISS-1, MISS-6, TEST-1, TEST-5
+**Fixed (31 items):** TD-1, TD-3, TD-4, TD-5, TD-7, TD-8, BUG-1, BUG-2, BUG-3, BUG-4, BUG-6, SEC-1, SEC-3, SEC-4, SEC-5, SEC-6, SEC-7, SEC-8, PERF-1, PERF-2, PERF-3, PERF-4, FRAG-2, FRAG-3, FRAG-4, SCALE-2, SCALE-3, SCALE-4, DEP-2, DEP-3, DEP-4
+
+**Partially fixed (2 items):** MISS-1 (no longer crashes but no real email provider), TEST-1 (profile/webhooks/analytics tests added, products/purchases still missing)
 
 **Invalid (1 item):** BUG-5 (was already present in `.env.example`)
 
-**Remaining (10 items):**
+**Not fixed — MISS-6 was already fixed:** MISS-6
 
-- Tech Debt: TD-2, TD-6
-- Security: SEC-2
-- Fragile: FRAG-1
-- Scaling: SCALE-1
-- Dependencies: DEP-1, DEP-5
-- Missing Features: MISS-2, MISS-3, MISS-4, MISS-5, MISS-7
-- Test Gaps: TEST-2, TEST-3, TEST-4, TEST-6
+**Remaining (13 items):**
+
+- Tech Debt: TD-2 (inline styles → Tailwind), TD-6 (better-auth tables outside Prisma)
+- Security: SEC-2 (no CSRF protection)
+- Fragile: FRAG-1 (untyped request.params casts)
+- Scaling: SCALE-1 (local filesystem uploads)
+- Dependencies: DEP-1 (zod v4), DEP-5 (react-router-dom v7)
+- Missing Features: MISS-2 (password reset), MISS-3 (email verification), MISS-4 (Stripe Connect), MISS-5 (file re-download), MISS-7 (monitoring)
+- Test Gaps: TEST-2 (checkout route test), TEST-3 (auth middleware tests), TEST-4 (web page tests), TEST-6 (E2E tests)
 
 _Concerns audit: 2026-03-07_

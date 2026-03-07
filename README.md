@@ -96,6 +96,39 @@ Creator: Sign up → Create product → Upload file → Set price → Publish �
 Customer: Open product page → Click Buy → Pay via Stripe → Download file
 ```
 
+## CI/CD
+
+This project uses GitHub Actions for continuous integration and deployment.
+
+### Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `.github/workflows/test.yml` | Push to main/develop, PRs | Type check, lint, and unit tests |
+| `.github/workflows/build.yml` | Push to main/develop, PRs | Build web app and server |
+| `.github/workflows/e2e.yml` | Push to main/develop, PRs | End-to-end tests with Playwright |
+
+### Status Badges
+
+```markdown
+[![Tests](https://github.com/YOUR_ORG/YOUR_REPO/actions/workflows/test.yml/badge.svg)]
+[![Build](https://github.com/YOUR_ORG/YOUR_REPO/actions/workflows/build.yml/badge.svg)]
+[![E2E](https://github.com/YOUR_ORG/YOUR_REPO/actions/workflows/e2e.yml/badge.svg)]
+```
+
+### Running E2E Tests Locally
+
+```bash
+# Install Playwright browsers
+pnpm exec playwright install
+
+# Run E2E tests
+just e2e
+
+# Run with UI
+just e2e-ui
+```
+
 ## License
 
 MIT
