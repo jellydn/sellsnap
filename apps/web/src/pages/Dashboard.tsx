@@ -1,7 +1,17 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchAnalytics, fetchProducts, type Product } from "../lib/api";
 import { formatPrice } from "../lib/format";
+
+// Reusable style constants for consistency
+const tableHeaderStyle = {
+  padding: "0.75rem",
+  fontSize: "0.875rem",
+  fontWeight: 500,
+  color: "#6b7280",
+};
+
+const cellPaddingStyle = { padding: "0.75rem" };
 
 interface AnalyticsData {
   products: Array<{
@@ -53,59 +63,19 @@ function AnalyticsSection({ analytics }: { analytics: AnalyticsData }) {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
-              <th
-                style={{
-                  textAlign: "left",
-                  padding: "0.75rem",
-                  fontSize: "0.875rem",
-                  fontWeight: 500,
-                  color: "#6b7280",
-                }}
-              >
-                Product
-              </th>
-              <th
-                style={{
-                  textAlign: "right",
-                  padding: "0.75rem",
-                  fontSize: "0.875rem",
-                  fontWeight: 500,
-                  color: "#6b7280",
-                }}
-              >
-                Views
-              </th>
-              <th
-                style={{
-                  textAlign: "right",
-                  padding: "0.75rem",
-                  fontSize: "0.875rem",
-                  fontWeight: 500,
-                  color: "#6b7280",
-                }}
-              >
-                Purchases
-              </th>
-              <th
-                style={{
-                  textAlign: "right",
-                  padding: "0.75rem",
-                  fontSize: "0.875rem",
-                  fontWeight: 500,
-                  color: "#6b7280",
-                }}
-              >
-                Revenue
-              </th>
+              <th style={{ textAlign: "left", ...tableHeaderStyle }}>Product</th>
+              <th style={{ textAlign: "right", ...tableHeaderStyle }}>Views</th>
+              <th style={{ textAlign: "right", ...tableHeaderStyle }}>Purchases</th>
+              <th style={{ textAlign: "right", ...tableHeaderStyle }}>Revenue</th>
             </tr>
           </thead>
           <tbody>
             {analytics.products.map((product) => (
               <tr key={product.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
-                <td style={{ padding: "0.75rem" }}>{product.title}</td>
-                <td style={{ padding: "0.75rem", textAlign: "right" }}>{product.viewCount}</td>
-                <td style={{ padding: "0.75rem", textAlign: "right" }}>{product.purchaseCount}</td>
-                <td style={{ padding: "0.75rem", textAlign: "right" }}>
+                <td style={cellPaddingStyle}>{product.title}</td>
+                <td style={{ ...cellPaddingStyle, textAlign: "right" }}>{product.viewCount}</td>
+                <td style={{ ...cellPaddingStyle, textAlign: "right" }}>{product.purchaseCount}</td>
+                <td style={{ ...cellPaddingStyle, textAlign: "right" }}>
                   {formatPrice(product.revenue)}
                 </td>
               </tr>
@@ -172,16 +142,40 @@ export function Dashboard() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const loadProducts = useCallback(async (cursorParam?: string) => {
+    const isInitialLoad = !cursorParam;
+    if (isInitialLoad) setLoading(true);
+    else setLoadingMore(true);
+
+    try {
+      const data = await fetchProducts(cursorParam);
+      if (cursorParam) {
+        setProducts((prev) => [...prev, ...data.items]);
+      } else {
+        setProducts(data.items);
+      }
+      setCursor(data.nextCursor);
+      setHasMore(data.hasMore);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load products");
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, []);
 
   useEffect(() => {
-    Promise.all([fetchProducts(), fetchAnalytics()])
-      .then(([productsData, analyticsData]) => {
-        setProducts(productsData);
+    Promise.all([loadProducts(), fetchAnalytics()])
+      .then(([, analyticsData]) => {
         setAnalytics(analyticsData);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [loadProducts]);
 
   if (loading) {
     return (
@@ -254,17 +248,40 @@ export function Dashboard() {
           </Link>
         </div>
       ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
-            gap: "1rem",
-          }}
-        >
-          {products.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
+        <>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
+              gap: "1rem",
+            }}
+          >
+            {products.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+          {hasMore && (
+            <div style={{ textAlign: "center", marginTop: "1.5rem" }}>
+              <button
+                type="button"
+                onClick={() => loadProducts(cursor ?? undefined)}
+                disabled={loadingMore}
+                style={{
+                  backgroundColor: loadingMore ? "#9ca3af" : "#2563eb",
+                  color: "white",
+                  padding: "0.625rem 1.5rem",
+                  borderRadius: "6px",
+                  border: "none",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                  cursor: loadingMore ? "not-allowed" : "pointer",
+                }}
+              >
+                {loadingMore ? "Loading..." : "Load More"}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

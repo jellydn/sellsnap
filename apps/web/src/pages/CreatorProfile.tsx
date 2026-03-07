@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import type { PaginatedResponse } from "../lib/api";
 import { formatPrice } from "../lib/format";
 
 interface CreatorProduct {
@@ -16,7 +17,20 @@ interface CreatorData {
   name: string;
   slug: string;
   avatarUrl: string | null;
-  products: CreatorProduct[];
+  products: PaginatedResponse<CreatorProduct>;
+}
+
+// Helper component for avatar display
+function Avatar({ name, avatarUrl }: { name: string; avatarUrl: string | null }) {
+  const initials = name.charAt(0).toUpperCase();
+
+  return avatarUrl ? (
+    <img src={avatarUrl} alt={name} className="w-20 h-20 rounded-full object-cover" />
+  ) : (
+    <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center">
+      <span className="text-2xl font-bold text-gray-500">{initials}</span>
+    </div>
+  );
 }
 
 export function CreatorProfile() {
@@ -26,7 +40,10 @@ export function CreatorProfile() {
   const [creator, setCreator] = useState<CreatorData | null>(null);
 
   useEffect(() => {
-    if (!slug) return;
+    if (!slug) {
+      setLoading(false);
+      return;
+    }
 
     fetch(`/api/creators/${slug}`)
       .then(async (res) => {
@@ -65,32 +82,20 @@ export function CreatorProfile() {
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
       <div className="flex items-center gap-4 mb-8">
-        {creator.avatarUrl ? (
-          <img
-            src={creator.avatarUrl}
-            alt={creator.name}
-            className="w-20 h-20 rounded-full object-cover"
-          />
-        ) : (
-          <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center">
-            <span className="text-2xl font-bold text-gray-500">
-              {creator.name.charAt(0).toUpperCase()}
-            </span>
-          </div>
-        )}
+        <Avatar name={creator.name} avatarUrl={creator.avatarUrl} />
         <div>
           <h1 className="text-2xl font-bold">{creator.name}</h1>
-          <p className="text-gray-500">@{creator.slug}</p>
+          {creator.slug && <p className="text-gray-500">@{creator.slug}</p>}
         </div>
       </div>
 
       <h2 className="text-xl font-semibold mb-4">Products</h2>
 
-      {creator.products.length === 0 ? (
+      {creator.products.items.length === 0 ? (
         <p className="text-gray-500">No products yet.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {creator.products.map((product) => (
+          {creator.products.items.map((product) => (
             <Link
               key={product.id}
               to={`/p/${product.slug}`}
