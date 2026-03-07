@@ -9,18 +9,17 @@
     "marketplace"
   ],
   "stack": "heroku-24",
-  "formation": {
-    "web": {
-      "quantity": 1,
-      "size": "basic",
-      "healthcheck": {
-        "command": "wget --no-verbose --tries=1 --spider http://localhost/",
-        "interval": 30,
-        "timeout": 3,
-        "startPeriod": 5,
-        "retries": 3
+  "healthchecks": {
+    "web": [
+      {
+        "type": "startup",
+        "name": "web check",
+        "path": "/",
+        "attempts": 3,
+        "wait": 5,
+        "timeout": 10
       }
-    }
+    ]
   },
   "env": {
     "NODE_ENV": {
