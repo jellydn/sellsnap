@@ -60,8 +60,8 @@ jobs:
 
       - name: Run lint
         run: |
-          pnpm --filter web biome check .
-          pnpm --filter server biome check .
+          cd apps/web && pnpm exec biome check .
+          cd ../server && pnpm exec biome check .
 
   test:
     name: Unit Tests
