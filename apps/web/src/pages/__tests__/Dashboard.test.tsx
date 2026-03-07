@@ -33,6 +33,14 @@ const mockAnalytics = {
   totals: { totalViews: 42, totalPurchases: 5, totalRevenue: 4995 },
 };
 
+function createMockPaginatedResponse<T>(items: T[]) {
+  return {
+    items,
+    nextCursor: null as string | null,
+    hasMore: false,
+  };
+}
+
 describe("Dashboard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -48,7 +56,7 @@ describe("Dashboard", () => {
   });
 
   it("renders products and analytics after fetch", async () => {
-    mockFetchProducts.mockResolvedValueOnce(mockProducts);
+    mockFetchProducts.mockResolvedValueOnce(createMockPaginatedResponse(mockProducts));
     mockFetchAnalytics.mockResolvedValueOnce(mockAnalytics);
 
     renderWithRouter(<Dashboard />);
@@ -63,7 +71,7 @@ describe("Dashboard", () => {
   });
 
   it("shows empty state when no products", async () => {
-    mockFetchProducts.mockResolvedValueOnce([]);
+    mockFetchProducts.mockResolvedValueOnce(createMockPaginatedResponse([]));
     mockFetchAnalytics.mockResolvedValueOnce({
       products: [],
       totals: { totalViews: 0, totalPurchases: 0, totalRevenue: 0 },
@@ -90,7 +98,7 @@ describe("Dashboard", () => {
   });
 
   it('shows "Create Product" link', async () => {
-    mockFetchProducts.mockResolvedValueOnce(mockProducts);
+    mockFetchProducts.mockResolvedValueOnce(createMockPaginatedResponse(mockProducts));
     mockFetchAnalytics.mockResolvedValueOnce(mockAnalytics);
 
     renderWithRouter(<Dashboard />);
@@ -102,5 +110,46 @@ describe("Dashboard", () => {
     const link = screen.getByRole("link", { name: "Create Product" });
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute("href", "/dashboard/products/new");
+  });
+
+  it("loads more products when clicking Load More", async () => {
+    const page1 = createMockPaginatedResponse([mockProducts[0]]);
+    page1.hasMore = true;
+    page1.nextCursor = "cursor-1";
+
+    const page2 = createMockPaginatedResponse([
+      { ...mockProducts[0], id: "2", title: "Product 2" },
+    ]);
+
+    mockFetchProducts.mockResolvedValueOnce(page1).mockResolvedValueOnce(page2);
+    mockFetchAnalytics.mockResolvedValueOnce(mockAnalytics);
+
+    renderWithRouter(<Dashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Products" })).toBeInTheDocument();
+    });
+
+    const loadMoreBtn = screen.getByRole("button", { name: "Load More" });
+    expect(loadMoreBtn).toBeInTheDocument();
+
+    await loadMoreBtn.click();
+
+    await waitFor(() => {
+      expect(screen.getByText("Product 2")).toBeInTheDocument();
+    });
+  });
+
+  it("does not show Load More when hasMore is false", async () => {
+    mockFetchProducts.mockResolvedValueOnce(createMockPaginatedResponse(mockProducts));
+    mockFetchAnalytics.mockResolvedValueOnce(mockAnalytics);
+
+    renderWithRouter(<Dashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Products" })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("button", { name: "Load More" })).not.toBeInTheDocument();
   });
 });
