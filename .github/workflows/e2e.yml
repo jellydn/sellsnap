@@ -47,6 +47,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client
+        run: pnpm -F db db:generate
+
       - name: Setup database
         env:
           DATABASE_URL: postgresql://sellsnap:sellsnap@localhost:5432/sellsnap
