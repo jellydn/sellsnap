@@ -60,7 +60,9 @@ async function start() {
   await server.register(analyticsRoutes);
 
   try {
-    const port = parseInt(process.env.PORT || "3000", 10);
+    // Use API_PORT if set, otherwise fallback to PORT (but not 80 to avoid conflict with frontend)
+    const rawPort = process.env.API_PORT || process.env.PORT || "3000";
+    const port = parseInt(rawPort, 10) === 80 ? 3000 : parseInt(rawPort, 10);
     const host = process.env.HOST || "0.0.0.0";
     await server.listen({ port, host });
     logger.success(`Server running at http://${host}:${port}`);

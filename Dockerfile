@@ -32,6 +32,7 @@ RUN mkdir -p /app/uploads/images /app/uploads/files && chown -R app:nodejs /app/
 USER app
 
 ENV PORT=3000
+ENV API_PORT=3000
 
 EXPOSE 80 3000
 
