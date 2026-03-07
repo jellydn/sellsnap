@@ -14,7 +14,7 @@
       {
         "type": "startup",
         "name": "web check",
-        "path": "/",
+        "path": "/health.json",
         "attempts": 3,
         "wait": 5,
         "timeout": 10
