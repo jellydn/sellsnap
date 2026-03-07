@@ -1,4 +1,42 @@
 const API_BASE = "/api";
+const DEFAULT_PAGE_SIZE = 50 as const;
+
+function buildFormData(data: Record<string, string | File | undefined | null>): FormData {
+  const formData = new FormData();
+  for (const [key, value] of Object.entries(data)) {
+    if (value === undefined) continue;
+    if (value === null) {
+      formData.append(key, "");
+      continue;
+    }
+    formData.append(key, value);
+  }
+  return formData;
+}
+
+interface AnalyticsData {
+  products: Array<{
+    id: string;
+    title: string;
+    viewCount: number;
+    purchaseCount: number;
+    revenue: number;
+  }>;
+  totals: {
+    totalViews: number;
+    totalPurchases: number;
+    totalRevenue: number;
+  };
+}
+
+// Helper function for consistent error handling
+async function handleApiResponse<T>(response: Response, defaultErrorMessage: string): Promise<T> {
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: defaultErrorMessage }));
+    throw new Error(error.error || defaultErrorMessage);
+  }
+  return response.json();
+}
 
 export interface Product {
   id: string;
@@ -15,17 +53,22 @@ export interface Product {
   updatedAt?: string;
 }
 
-export async function fetchProducts(): Promise<Product[]> {
-  const response = await fetch(`${API_BASE}/products`, {
+export interface PaginatedResponse<T> {
+  items: T[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export async function fetchProducts(cursor?: string): Promise<PaginatedResponse<Product>> {
+  const params = new URLSearchParams();
+  if (cursor) params.set("cursor", cursor);
+  params.set("limit", String(DEFAULT_PAGE_SIZE));
+
+  const response = await fetch(`${API_BASE}/products?${params}`, {
     credentials: "include",
   });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "Failed to fetch products" }));
-    throw new Error(error.error || "Failed to fetch products");
-  }
-
-  return response.json();
+  return handleApiResponse<PaginatedResponse<Product>>(response, "Failed to fetch products");
 }
 
 export interface CreateProductData {
@@ -56,12 +99,7 @@ export async function createProduct(data: CreateProductData): Promise<Product> {
     body: formData,
   });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "Failed to create product" }));
-    throw new Error(error.error || "Failed to create product");
-  }
-
-  return response.json();
+  return handleApiResponse<Product>(response, "Failed to create product");
 }
 
 export async function fetchProduct(id: string): Promise<Product> {
@@ -69,12 +107,7 @@ export async function fetchProduct(id: string): Promise<Product> {
     credentials: "include",
   });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "Failed to fetch product" }));
-    throw new Error(error.error || "Failed to fetch product");
-  }
-
-  return response.json();
+  return handleApiResponse<Product>(response, "Failed to fetch product");
 }
 
 export interface UpdateProductData {
@@ -88,27 +121,15 @@ export interface UpdateProductData {
 }
 
 export async function updateProduct(id: string, data: UpdateProductData): Promise<Product> {
-  const formData = new FormData();
-
-  if (data.title !== undefined) formData.append("title", data.title);
-  if (data.description !== undefined) formData.append("description", data.description);
-  if (data.price !== undefined) formData.append("price", data.price.toString());
-  if (data.slug !== undefined) formData.append("slug", data.slug);
-  if (data.previewContent !== undefined) formData.append("previewContent", data.previewContent);
-  if (data.coverImage !== undefined) {
-    if (data.coverImage === null) {
-      formData.append("coverImage", "");
-    } else {
-      formData.append("coverImage", data.coverImage);
-    }
-  }
-  if (data.productFile !== undefined) {
-    if (data.productFile === null) {
-      formData.append("productFile", "");
-    } else {
-      formData.append("productFile", data.productFile);
-    }
-  }
+  const formData = buildFormData({
+    title: data.title,
+    description: data.description,
+    price: data.price?.toString(),
+    slug: data.slug,
+    previewContent: data.previewContent,
+    coverImage: data.coverImage,
+    productFile: data.productFile,
+  });
 
   const response = await fetch(`${API_BASE}/products/${id}`, {
     method: "PUT",
@@ -116,12 +137,7 @@ export async function updateProduct(id: string, data: UpdateProductData): Promis
     body: formData,
   });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "Failed to update product" }));
-    throw new Error(error.error || "Failed to update product");
-  }
-
-  return response.json();
+  return handleApiResponse<Product>(response, "Failed to update product");
 }
 
 export async function toggleProductPublish(
@@ -132,12 +148,10 @@ export async function toggleProductPublish(
     credentials: "include",
   });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "Failed to toggle publish status" }));
-    throw new Error(error.error || "Failed to toggle publish status");
-  }
-
-  return response.json();
+  return handleApiResponse<{ id: string; title: string; slug: string; published: boolean }>(
+    response,
+    "Failed to toggle publish status",
+  );
 }
 
 export async function createCheckoutSession(
@@ -153,25 +167,13 @@ export async function createCheckoutSession(
     body: JSON.stringify({ customerEmail }),
   });
 
-  if (!response.ok) {
-    const error = await response
-      .json()
-      .catch(() => ({ error: "Failed to create checkout session" }));
-    throw new Error(error.error || "Failed to create checkout session");
-  }
-
-  return response.json();
+  return handleApiResponse<{ url: string }>(response, "Failed to create checkout session");
 }
 
-export async function fetchAnalytics() {
+export async function fetchAnalytics(): Promise<AnalyticsData> {
   const response = await fetch(`${API_BASE}/analytics`, {
     credentials: "include",
   });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "Failed to fetch analytics" }));
-    throw new Error(error.error || "Failed to fetch analytics");
-  }
-
-  return response.json();
+  return handleApiResponse<AnalyticsData>(response, "Failed to fetch analytics");
 }
