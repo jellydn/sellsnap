@@ -10,15 +10,6 @@ import { paginate, parseLimit } from "../lib/pagination";
 import { prisma } from "../lib/prisma";
 import { saveFile, saveImage, validateImageFile, validateProductFile } from "../lib/upload";
 
-// Helper to drain a readable stream
-async function drainStream(stream: NodeJS.ReadableStream): Promise<void> {
-  return new Promise((resolve, reject) => {
-    stream.on("data", () => {});
-    stream.on("end", resolve);
-    stream.on("error", reject);
-  });
-}
-
 interface PrismaError {
   code: string;
 }
