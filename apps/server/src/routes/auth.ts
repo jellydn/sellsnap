@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { auth } from "../lib/auth";
+import { auth, headersToHeaders } from "../lib/auth";
 
 export async function authRoutes(server: FastifyInstance): Promise<void> {
   server.route({
@@ -8,16 +8,23 @@ export async function authRoutes(server: FastifyInstance): Promise<void> {
     async handler(request, reply) {
       try {
         const url = new URL(request.url, `http://${request.headers.host}`);
+        const headers = headersToHeaders(
+          request.headers as Record<string, string | string[] | undefined>,
+        );
 
-        const headers = new Headers();
-        for (const [key, value] of Object.entries(request.headers)) {
-          if (value) headers.append(key, value.toString());
+        let body: RequestInit["body"] | undefined;
+        if (!request.body) {
+          body = undefined;
+        } else if (typeof request.body === "string") {
+          body = request.body;
+        } else if (typeof request.body === "object") {
+          body = JSON.stringify(request.body);
         }
 
         const req = new Request(url.toString(), {
           method: request.method,
           headers,
-          ...(request.body ? { body: request.body as string } : {}),
+          ...(body ? { body } : {}),
         });
 
         const response = await auth.handler(req);
@@ -26,7 +33,8 @@ export async function authRoutes(server: FastifyInstance): Promise<void> {
         response.headers.forEach((value, key) => {
           reply.header(key, value);
         });
-        reply.send(response.body ? await response.text() : null);
+        const responseBody = response.body ? await response.text() : "";
+        reply.send(responseBody);
       } catch (error) {
         server.log.error(error);
         reply.status(500).send({
