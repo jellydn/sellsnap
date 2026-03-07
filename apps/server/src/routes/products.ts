@@ -1,10 +1,70 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
-import type { FastifyInstance } from "fastify";
-import { auth, headersToHeaders } from "../lib/auth";
+import type { MultipartFile } from "@fastify/multipart";
+import { logger } from "@sellsnap/logger";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { getSessionFromRequest } from "../lib/auth";
+import { PURCHASE_STATUS } from "../lib/constants";
+import { paginate, parseLimit } from "../lib/pagination";
 import { prisma } from "../lib/prisma";
 import { saveFile, saveImage, validateImageFile, validateProductFile } from "../lib/upload";
+
+// Helper to drain a readable stream
+async function drainStream(stream: NodeJS.ReadableStream): Promise<void> {
+  return new Promise((resolve, reject) => {
+    stream.on("data", () => {});
+    stream.on("end", resolve);
+    stream.on("error", reject);
+  });
+}
+
+interface PrismaError {
+  code: string;
+}
+
+function isPrismaError(error: unknown): error is PrismaError {
+  return (
+    typeof error === "object" && error !== null && "code" in error && typeof error.code === "string"
+  );
+}
+
+function safeDeletePath(path: string, context: string): void {
+  if (!path || !existsSync(path)) return;
+  try {
+    unlinkSync(path);
+  } catch (error) {
+    logger.warn({ error, path }, `Failed to delete ${context}`);
+  }
+}
+
+function toProductResponse(product: {
+  id: string;
+  title: string;
+  slug: string;
+  description: string;
+  price: number;
+  coverImageUrl: string | null;
+  previewContent: string | null;
+  published: boolean;
+  viewCount: number;
+  createdAt: Date;
+  updatedAt?: Date;
+}) {
+  return {
+    id: product.id,
+    title: product.title,
+    slug: product.slug,
+    description: product.description,
+    price: product.price,
+    coverImageUrl: product.coverImageUrl,
+    previewContent: product.previewContent,
+    published: product.published,
+    viewCount: product.viewCount,
+    createdAt: product.createdAt,
+    ...(product.updatedAt && { updatedAt: product.updatedAt }),
+  };
+}
 
 const recentViews = new Map<string, number>();
 const VIEW_COOLDOWN_MS = 60_000; // 1 minute per IP per product
@@ -27,11 +87,13 @@ async function flushViewCounts(): Promise<void> {
         }),
       ),
     );
-  } catch {
-    for (const [, increment] of updates) {
-      const current = viewCountQueue.get(updates[0][0]) || 0;
-      viewCountQueue.set(updates[0][0], current + increment);
+  } catch (error) {
+    // Re-queue failed updates for next flush
+    for (const [productId, increment] of updates) {
+      const current = viewCountQueue.get(productId) || 0;
+      viewCountQueue.set(productId, current + increment);
     }
+    logger.error({ error }, "Failed to flush view counts");
   }
 }
 
@@ -47,18 +109,66 @@ setInterval(() => {
   }
 }, 300_000);
 
+// Helper: validate session and return 401 if unauthorized
+async function requireAuth(
+  request: Parameters<typeof getSessionFromRequest>[0],
+  reply: FastifyReply,
+) {
+  const session = await getSessionFromRequest(request);
+  if (!session?.user) {
+    return reply.status(401).send({ error: "Unauthorized" });
+  }
+  return session;
+}
+
+// Helper: parse multipart form data
+interface ParsedFile {
+  buffer: Buffer;
+  filename: string;
+  mimetype: string;
+}
+
+interface ParsedMultipartData {
+  fields: Record<string, string>;
+  coverImage: ParsedFile | null;
+  productFile: ParsedFile | null;
+}
+
+async function parseMultipartData(request: FastifyRequest): Promise<ParsedMultipartData | null> {
+  const fields: Record<string, string> = {};
+  let coverImage: ParsedFile | null = null;
+  let productFile: ParsedFile | null = null;
+
+  try {
+    const parts = request.parts();
+    for await (const part of parts) {
+      if (part.type === "file") {
+        const file = part as MultipartFile;
+        const buffer = await file.toBuffer();
+        const fileData = { buffer, filename: file.filename, mimetype: file.mimetype };
+
+        if (part.fieldname === "coverImage") {
+          coverImage = fileData;
+        } else if (part.fieldname === "productFile") {
+          productFile = fileData;
+        }
+      } else {
+        fields[part.fieldname] = part.value as string;
+      }
+    }
+    return { fields, coverImage, productFile };
+  } catch {
+    return null;
+  }
+}
+
 export async function productRoutes(server: FastifyInstance): Promise<void> {
   server.get("/api/products", async (request, reply) => {
-    const session = await auth.api.getSession({
-      headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),
-    });
-
-    if (!session?.user) {
-      return reply.status(401).send({ error: "Unauthorized" });
-    }
+    const session = await requireAuth(request, reply);
+    if (!session?.user) return;
 
     const { cursor, limit = 10 } = request.query as { cursor?: string; limit?: number };
-    const take = Math.min(Math.max(1, limit || 10), 100);
+    const take = parseLimit(limit, 100);
 
     const products = await prisma.product.findMany({
       where: { creatorId: session.user.id },
@@ -66,7 +176,7 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
         _count: {
           select: {
             purchases: {
-              where: { status: "completed" },
+              where: { status: PURCHASE_STATUS.COMPLETED },
             },
           },
         },
@@ -77,36 +187,21 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
       skip: cursor ? 1 : 0,
     });
 
-    const hasMore = products.length > take;
-    const items = hasMore ? products.slice(0, -1) : products;
-    const nextCursor = hasMore ? items[items.length - 1]?.id : null;
+    const { items, nextCursor, hasMore } = paginate(products, take);
 
     return {
-      items: items.map(
-        (product: {
-          id: string;
-          title: string;
-          slug: string;
-          description: string;
-          price: number;
-          coverImageUrl: string | null;
-          published: boolean;
-          viewCount: number;
-          createdAt: Date;
-          _count: { purchases: number };
-        }) => ({
-          id: product.id,
-          title: product.title,
-          slug: product.slug,
-          description: product.description,
-          price: product.price,
-          coverImageUrl: product.coverImageUrl,
-          published: product.published,
-          viewCount: product.viewCount,
-          purchaseCount: product._count.purchases,
-          createdAt: product.createdAt,
-        }),
-      ),
+      items: items.map((product) => ({
+        id: product.id,
+        title: product.title,
+        slug: product.slug,
+        description: product.description,
+        price: product.price,
+        coverImageUrl: product.coverImageUrl,
+        published: product.published,
+        viewCount: product.viewCount,
+        purchaseCount: product._count.purchases,
+        createdAt: product.createdAt,
+      })),
       nextCursor,
       hasMore,
     };
@@ -136,8 +231,8 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
         return reply.status(404).send({ error: "Product not found" });
       }
 
-      const clientIp =
-        (request.headers["x-forwarded-for"] as string)?.split(",")[0] || request.ip || "unknown";
+      const forwardedIp = (request.headers["x-forwarded-for"] as string)?.split(",")[0];
+      const clientIp = forwardedIp || request.ip || "unknown";
       const viewKey = `${product.id}:${clientIp}`;
       const now = Date.now();
 
@@ -170,13 +265,8 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
   );
 
   server.get("/api/products/:id", async (request, reply) => {
-    const session = await auth.api.getSession({
-      headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),
-    });
-
-    if (!session?.user) {
-      return reply.status(401).send({ error: "Unauthorized" });
-    }
+    const session = await requireAuth(request, reply);
+    if (!session?.user) return;
 
     const { id } = request.params as { id: string };
 
@@ -192,46 +282,19 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
       return reply.status(403).send({ error: "Forbidden" });
     }
 
-    return {
-      id: product.id,
-      title: product.title,
-      slug: product.slug,
-      description: product.description,
-      price: product.price,
-      coverImageUrl: product.coverImageUrl,
-      previewContent: product.previewContent,
-      published: product.published,
-      viewCount: product.viewCount,
-      createdAt: product.createdAt,
-      updatedAt: product.updatedAt,
-    };
+    return toProductResponse(product);
   });
 
   server.post("/api/products", async (request, reply) => {
-    const session = await auth.api.getSession({
-      headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),
-    });
+    const session = await requireAuth(request, reply);
+    if (!session?.user) return;
 
-    if (!session?.user) {
-      return reply.status(401).send({ error: "Unauthorized" });
+    const multipartData = await parseMultipartData(request);
+    if (!multipartData) {
+      return reply.status(400).send({ error: "Invalid request format" });
     }
 
-    const parts = request.parts();
-    const fields: Record<string, string> = {};
-    let coverImage: Awaited<ReturnType<typeof parts.next>>["value"] | null = null;
-    let productFile: Awaited<ReturnType<typeof parts.next>>["value"] | null = null;
-
-    for await (const part of parts) {
-      if (part.type === "file") {
-        if (part.fieldname === "coverImage") {
-          coverImage = part;
-        } else if (part.fieldname === "productFile") {
-          productFile = part;
-        }
-      } else {
-        fields[part.fieldname] = part.value as string;
-      }
-    }
+    const { fields, coverImage, productFile } = multipartData;
 
     const title = fields.title;
     const description = fields.description || "";
@@ -278,13 +341,11 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
         orderBy: { slug: "desc" },
       });
 
-      if (lastSimilar) {
-        const match = lastSimilar.slug.match(/^.+-(\d+)$/);
-        const lastNum = match ? parseInt(match[1], 10) : 0;
-        slug = `${baseSlug}-${lastNum + 1}`;
-      } else {
-        slug = `${baseSlug}-1`;
-      }
+      const slugSuffix = lastSimilar
+        ? parseInt(lastSimilar.slug.match(/^.+-(\d+)$/)?.[1] || "0", 10) + 1
+        : 1;
+
+      slug = `${baseSlug}-${slugSuffix}`;
     }
 
     let coverImageUrl: string | null = null;
@@ -310,25 +371,9 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
         },
       });
 
-      return {
-        id: product.id,
-        title: product.title,
-        slug: product.slug,
-        description: product.description,
-        price: product.price,
-        coverImageUrl: product.coverImageUrl,
-        previewContent: product.previewContent,
-        published: product.published,
-        viewCount: product.viewCount,
-        createdAt: product.createdAt,
-      };
+      return toProductResponse(product);
     } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "code" in error &&
-        error.code === "P2002"
-      ) {
+      if (isPrismaError(error) && error.code === "P2002") {
         slug = `${baseSlug}-${randomUUID().slice(0, 8)}`;
         const product = await prisma.product.create({
           data: {
@@ -345,31 +390,15 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
           },
         });
 
-        return {
-          id: product.id,
-          title: product.title,
-          slug: product.slug,
-          description: product.description,
-          price: product.price,
-          coverImageUrl: product.coverImageUrl,
-          previewContent: product.previewContent,
-          published: product.published,
-          viewCount: product.viewCount,
-          createdAt: product.createdAt,
-        };
+        return toProductResponse(product);
       }
       throw error;
     }
   });
 
   server.put("/api/products/:id", async (request, reply) => {
-    const session = await auth.api.getSession({
-      headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),
-    });
-
-    if (!session?.user) {
-      return reply.status(401).send({ error: "Unauthorized" });
-    }
+    const session = await requireAuth(request, reply);
+    if (!session?.user) return;
 
     const { id } = request.params as { id: string };
 
@@ -385,22 +414,12 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
       return reply.status(403).send({ error: "Forbidden" });
     }
 
-    const parts = request.parts();
-    const fields: Record<string, string> = {};
-    let coverImage: Awaited<ReturnType<typeof parts.next>>["value"] | null = null;
-    let productFile: Awaited<ReturnType<typeof parts.next>>["value"] | null = null;
-
-    for await (const part of parts) {
-      if (part.type === "file") {
-        if (part.fieldname === "coverImage") {
-          coverImage = part;
-        } else if (part.fieldname === "productFile") {
-          productFile = part;
-        }
-      } else {
-        fields[part.fieldname] = part.value as string;
-      }
+    const multipartData = await parseMultipartData(request);
+    if (!multipartData) {
+      return reply.status(400).send({ error: "Invalid request format" });
     }
+
+    const { fields, coverImage, productFile } = multipartData;
 
     const title = fields.title;
     const description = fields.description;
@@ -446,6 +465,8 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
         return reply.status(400).send({ error: validationError });
       }
       coverImageUrl = await saveImage(coverImage.file, coverImage.filename);
+    } else if (fields.coverImage === "") {
+      coverImageUrl = null;
     }
     if (coverImage !== null || fields.coverImage !== undefined) {
       updateData.coverImageUrl = coverImageUrl;
@@ -468,29 +489,12 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
       data: updateData,
     });
 
-    return {
-      id: product.id,
-      title: product.title,
-      slug: product.slug,
-      description: product.description,
-      price: product.price,
-      coverImageUrl: product.coverImageUrl,
-      previewContent: product.previewContent,
-      published: product.published,
-      viewCount: product.viewCount,
-      createdAt: product.createdAt,
-      updatedAt: product.updatedAt,
-    };
+    return toProductResponse(product);
   });
 
   server.patch("/api/products/:id/publish", async (request, reply) => {
-    const session = await auth.api.getSession({
-      headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),
-    });
-
-    if (!session?.user) {
-      return reply.status(401).send({ error: "Unauthorized" });
-    }
+    const session = await requireAuth(request, reply);
+    if (!session?.user) return;
 
     const { id } = request.params as { id: string };
 
@@ -520,13 +524,8 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
   });
 
   server.delete("/api/products/:id", async (request, reply) => {
-    const session = await auth.api.getSession({
-      headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),
-    });
-
-    if (!session?.user) {
-      return reply.status(401).send({ error: "Unauthorized" });
-    }
+    const session = await requireAuth(request, reply);
+    if (!session?.user) return;
 
     const { id } = request.params as { id: string };
 
@@ -542,18 +541,10 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
       return reply.status(403).send({ error: "Forbidden" });
     }
 
-    if (product.filePath && existsSync(product.filePath)) {
-      try {
-        unlinkSync(product.filePath);
-      } catch {}
-    }
+    safeDeletePath(product.filePath, "product file");
     if (product.coverImageUrl) {
       const imagePath = join(process.cwd(), product.coverImageUrl.replace(/^\//, ""));
-      if (existsSync(imagePath)) {
-        try {
-          unlinkSync(imagePath);
-        } catch {}
-      }
+      safeDeletePath(imagePath, "cover image");
     }
 
     await prisma.product.delete({ where: { id } });
