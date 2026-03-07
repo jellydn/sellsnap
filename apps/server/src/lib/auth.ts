@@ -4,6 +4,7 @@ import type { FastifyRequest } from "fastify";
 import { prisma } from "./prisma";
 
 export const auth = betterAuth({
+  secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.FRONTEND_URL || "http://localhost:5173",
   trustedOrigins: ["http://localhost:5173", "http://localhost:4173"],
   database: prismaAdapter(prisma, {
