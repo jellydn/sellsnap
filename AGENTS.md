@@ -36,22 +36,50 @@ just format            # Biome format only
 
 # Testing
 just test              # Run all tests (web + server)
-just test-watch        # Watch mode
-just test-file <file>  # Single test file (e.g., src/components/__tests__/My.test.tsx)
-cd apps/web && pnpm vitest run                    # Web tests only
-cd apps/server && pnpm vitest run                 # Server tests only
+just test-watch        # Watch mode (web + server)
+cd apps/web && pnpm vitest run <file>       # Single web test
+cd apps/server && pnpm vitest run <file>    # Single server test
 
 # E2E Testing
 just e2e               # Run Playwright tests
-just e2e-ui           # Run Playwright with UI
+just e2e-ui            # Run Playwright with UI
 
-# Prisma / Database
+# Database
 just prisma-migrate <name>   # Create migration
 just prisma-generate          # Generate Prisma client
 just prisma-push              # Push schema to DB
 ```
 
-**Required env vars**: `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `STRIPE_KEY`, `STRIPE_WEBHOOK_SECRET`
+---
+
+## Environment Setup
+
+Copy from `.env.example`. Required vars: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `FRONTEND_URL`, `CORS_ORIGIN`, `API_URL`.
+
+---
+
+## Local Database Setup
+
+```bash
+docker-compose up -d   # PostgreSQL on port 5432
+docker-compose down   # Stop services
+```
+
+Credentials: user `sellsnap`, password `sellsnap`, database `sellsnap`
+
+```bash
+just prisma-push              # Push schema (dev)
+just prisma-migrate <name>    # Create migration
+```
+
+---
+
+## Pre-commit Hooks
+
+```bash
+prek install          # Install hooks
+prek run --all-files # Run all hooks manually
+```
 
 ---
 
@@ -92,41 +120,20 @@ import { type User } from "@/types/user";
 ### Error Handling
 
 - Use try/catch with async/await
-- Return typed error results or use Error boundaries
+- Return typed error results: `type Result<T> = { success: true; data: T } | { success: false; error: string }`
 - Never expose internal errors to clients
-
-```typescript
-type Result<T> = { success: true; data: T } | { success: false; error: string };
-
-async function fetchUser(id: string): Promise<Result<User>> {
-  try {
-    const user = await db.user.findUnique({ where: { id } });
-    if (!user) return { success: false, error: "User not found" };
-    return { success: true, data: user };
-  } catch {
-    return { success: false, error: "Failed to fetch user" };
-  }
-}
-```
-
-### Fastify API Patterns
-
-- Use Zod for validation, define schemas separately from routes
 
 ---
 
 ## Testing (Vitest + @testing-library/react)
 
-- Follow AAA pattern: Arrange, Act, Assert
-- Test behavior, not implementation details
-- Use `describe` blocks to group related tests
+Follow AAA pattern: Arrange, Act, Assert. Test behavior, not implementation details.
 
 ---
 
 ## Database / Prisma
 
 - Use Prisma client: `import { db } from "db"`
-- Name migrations descriptively: `just prisma-migrate add_product_slug`
 - Use transactions for multi-step operations
 
 ---
@@ -134,21 +141,14 @@ async function fetchUser(id: string): Promise<Result<User>> {
 ## CSS / Styling
 
 - Use Tailwind CSS v4
-- Keep custom CSS minimal
 - Configure in `apps/web/src/index.css` with `@import "tailwindcss"`
+- Keep custom CSS minimal
 
 ---
 
-## Linting & Formatting
+## Path Aliases
 
-Biome is configured in `apps/web/biome.json` and `apps/server/biome.json`.
-
-```bash
-just lint              # Runs on both web and server
-just format            # Format only
-```
-
-Pre-commit hooks run automatically on commit (via prek).
+Web app uses `@/` as base: `@/components/*`, `@/lib/*`, `@/types/*` → `apps/web/src/*`
 
 ---
 
