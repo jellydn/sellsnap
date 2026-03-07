@@ -35,7 +35,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <nav style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           {isPending ? (
             <span style={{ color: "#6b7280" }}>Loading...</span>
-          ) : session ? (
+          ) : session?.user ? (
             <>
               <Link
                 to="/dashboard/settings"
