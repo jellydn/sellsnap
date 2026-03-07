@@ -59,7 +59,9 @@ jobs:
         run: pnpm -F db db:generate
 
       - name: Run lint
-        run: pnpm lint
+        run: |
+          pnpm --filter web biome check .
+          pnpm --filter server biome check .
 
   test:
     name: Unit Tests
