@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import { saveFile, saveImage, validateImageFile, validateProductFile } from "../upload";
 
@@ -18,8 +19,8 @@ vi.mock("node:crypto", () => ({
   randomUUID: () => "test-uuid",
 }));
 
-async function* mockFileStream(data: string): AsyncGenerator<Buffer> {
-  yield Buffer.from(data);
+function mockFileStream(data: string): Readable {
+  return Readable.from(Buffer.from(data));
 }
 
 describe("validateImageFile", () => {
