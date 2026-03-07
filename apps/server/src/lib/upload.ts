@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { createWriteStream, existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { extname, join } from "node:path";
-import type { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 
 const UPLOADS_DIR = join(process.cwd(), "uploads");
 export const IMAGES_DIR = join(UPLOADS_DIR, "images");
@@ -72,18 +70,18 @@ export function validateProductFile(filename: string): string | null {
   return null;
 }
 
-export async function saveImage(file: Readable, filename: string): Promise<string> {
+export async function saveImage(buffer: Buffer, filename: string): Promise<string> {
   const ext = extname(filename || ".jpg") || ".jpg";
   const imageName = `${randomUUID()}${ext}`;
   const imagePath = join(IMAGES_DIR, imageName);
-  await pipeline(file, createWriteStream(imagePath));
+  writeFileSync(imagePath, buffer);
   return `/uploads/images/${imageName}`;
 }
 
-export async function saveFile(file: Readable, filename: string): Promise<string> {
+export async function saveFile(buffer: Buffer, filename: string): Promise<string> {
   const ext = extname(filename || ".pdf") || ".pdf";
   const newFileName = `${randomUUID()}${ext}`;
   const filePath = join(FILES_DIR, newFileName);
-  await pipeline(file, createWriteStream(filePath));
+  writeFileSync(filePath, buffer);
   return filePath;
 }

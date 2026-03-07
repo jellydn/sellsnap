@@ -350,10 +350,10 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
 
     let coverImageUrl: string | null = null;
     if (coverImage) {
-      coverImageUrl = await saveImage(coverImage.file, coverImage.filename);
+      coverImageUrl = await saveImage(coverImage.buffer, coverImage.filename);
     }
 
-    const productFilePath = await saveFile(productFile.file, productFile.filename);
+    const productFilePath = await saveFile(productFile.buffer, productFile.filename);
 
     try {
       const product = await prisma.product.create({
@@ -464,7 +464,7 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
       if (validationError) {
         return reply.status(400).send({ error: validationError });
       }
-      coverImageUrl = await saveImage(coverImage.file, coverImage.filename);
+      coverImageUrl = await saveImage(coverImage.buffer, coverImage.filename);
     } else if (fields.coverImage === "") {
       coverImageUrl = null;
     }
@@ -478,7 +478,7 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
       if (fileValidationError) {
         return reply.status(400).send({ error: fileValidationError });
       }
-      filePath = await saveFile(productFile.file, productFile.filename);
+      filePath = await saveFile(productFile.buffer, productFile.filename);
     }
     if (productFile !== null || fields.productFile !== undefined) {
       updateData.filePath = filePath;

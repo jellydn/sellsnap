@@ -1,7 +1,6 @@
-import type { Readable } from "node:stream";
 import multipart from "@fastify/multipart";
 import Fastify from "fastify";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockGetSession = vi.fn();
 const mockProductFindMany = vi.fn();
@@ -13,15 +12,6 @@ const mockProductDelete = vi.fn();
 const mockTransaction = vi.fn();
 const mockSaveFile = vi.fn();
 const mockSaveImage = vi.fn();
-
-// Helper to drain a readable stream
-async function drainStream(stream: Readable): Promise<void> {
-  return new Promise((resolve, reject) => {
-    stream.on("data", () => {});
-    stream.on("end", resolve);
-    stream.on("error", reject);
-  });
-}
 
 vi.mock("../../lib/auth", () => ({
   auth: {
@@ -62,14 +52,8 @@ vi.mock("../../lib/prisma", () => ({
 }));
 
 vi.mock("../../lib/upload", () => ({
-  saveFile: async (file: Readable, ...args: unknown[]) => {
-    await drainStream(file);
-    return mockSaveFile(file, ...args);
-  },
-  saveImage: async (file: Readable, ...args: unknown[]) => {
-    await drainStream(file);
-    return mockSaveImage(file, ...args);
-  },
+  saveFile: (...args: unknown[]) => mockSaveFile(...args),
+  saveImage: (...args: unknown[]) => mockSaveImage(...args),
   validateImageFile: vi.fn(() => null),
   validateProductFile: vi.fn(() => null),
 }));
@@ -478,7 +462,9 @@ describe("product routes", () => {
       // Assert - Unique slug is generated
       expect(mockProductCreate).toHaveBeenCalledWith(
         expect.objectContaining({
-          slug: "new-product-1",
+          data: expect.objectContaining({
+            slug: "new-product-1",
+          }),
         }),
       );
     });

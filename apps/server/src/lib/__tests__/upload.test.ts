@@ -1,4 +1,3 @@
-import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import { saveFile, saveImage, validateImageFile, validateProductFile } from "../upload";
 
@@ -6,10 +5,7 @@ vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
   return {
     ...actual,
-    createWriteStream: vi.fn(() => {
-      const { PassThrough } = require("node:stream");
-      return new PassThrough();
-    }),
+    writeFileSync: vi.fn(),
     existsSync: vi.fn(() => true),
     mkdirSync: vi.fn(),
   };
@@ -18,10 +14,6 @@ vi.mock("node:fs", async (importOriginal) => {
 vi.mock("node:crypto", () => ({
   randomUUID: () => "test-uuid",
 }));
-
-function mockFileStream(data: string): Readable {
-  return Readable.from(Buffer.from(data));
-}
 
 describe("validateImageFile", () => {
   it("returns null for valid image/jpeg with .jpg", () => {
@@ -88,18 +80,18 @@ describe("validateProductFile", () => {
 });
 
 describe("saveImage", () => {
-  it("streams file and returns URL path starting with /uploads/images/", async () => {
-    const stream = mockFileStream("image-data");
-    const result = await saveImage(stream, "photo.jpg");
+  it("saves buffer and returns URL path starting with /uploads/images/", async () => {
+    const buffer = Buffer.from("image-data");
+    const result = await saveImage(buffer, "photo.jpg");
 
     expect(result).toBe("/uploads/images/test-uuid.jpg");
   });
 });
 
 describe("saveFile", () => {
-  it("streams file and returns absolute file path", async () => {
-    const stream = mockFileStream("file-data");
-    const result = await saveFile(stream, "document.pdf");
+  it("saves buffer and returns absolute file path", async () => {
+    const buffer = Buffer.from("file-data");
+    const result = await saveFile(buffer, "document.pdf");
 
     expect(result).toContain("test-uuid.pdf");
     expect(result).toContain("files");
