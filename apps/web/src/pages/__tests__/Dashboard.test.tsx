@@ -1,4 +1,5 @@
 import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { renderWithRouter } from "../../test/test-utils";
 import { Dashboard } from "../Dashboard";
 
@@ -133,7 +134,7 @@ describe("Dashboard", () => {
     const loadMoreBtn = screen.getByRole("button", { name: "Load More" });
     expect(loadMoreBtn).toBeInTheDocument();
 
-    await loadMoreBtn.click();
+    await userEvent.click(loadMoreBtn);
 
     await waitFor(() => {
       expect(screen.getByText("Product 2")).toBeInTheDocument();
