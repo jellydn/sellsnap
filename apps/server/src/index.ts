@@ -1,9 +1,15 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import { logger } from "@sellsnap/logger";
 import Fastify from "fastify";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 import { ensureUploadDirs, IMAGES_DIR } from "./lib/upload";
 import { analyticsRoutes } from "./routes/analytics";
 import { authRoutes } from "./routes/auth";
@@ -59,10 +65,29 @@ async function start() {
   await server.register(profileRoutes);
   await server.register(analyticsRoutes);
 
+  if (process.env.NODE_ENV === "production") {
+    const frontendPath = path.join(__dirname, "../../web/dist");
+    await server.register(await import("@fastify/static"), {
+      root: frontendPath,
+      wildcard: false,
+      decorateReply: false,
+    });
+
+    server.setNotFoundHandler(async (request, reply) => {
+      const url = request.url;
+      if (url.startsWith("/api/") || url.startsWith("/uploads/") || url.startsWith("/assets/")) {
+        return reply.status(404).send({ error: "Not found" });
+      }
+      try {
+        return reply.sendFile("index.html");
+      } catch {
+        return reply.status(404).send("Not found");
+      }
+    });
+  }
+
   try {
-    // Use API_PORT if set, otherwise fallback to PORT (but not 80 to avoid conflict with frontend)
-    const rawPort = process.env.API_PORT || process.env.PORT || "3000";
-    const port = parseInt(rawPort, 10) === 80 ? 3000 : parseInt(rawPort, 10);
+    const port = parseInt(process.env.API_PORT || process.env.PORT || "3000", 10);
     const host = process.env.HOST || "0.0.0.0";
     await server.listen({ port, host });
     logger.success(`Server running at http://${host}:${port}`);

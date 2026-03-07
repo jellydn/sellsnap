@@ -32,11 +32,12 @@ RUN mkdir -p /app/uploads/images /app/uploads/files && chown -R app:nodejs /app/
 USER app
 
 ENV PORT=3000
-ENV API_PORT=3000
+ENV API_PORT=80
+ENV API_URL=https://store.itman.fyi
 
-EXPOSE 80 3000
+EXPOSE 80 3000 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1
 
-CMD ["sh", "-c", "concurrently --kill-others \"serve -s /app/apps/web/dist -l 80\" \"npx tsx /app/apps/server/src/index.ts\""]
+CMD ["sh", "-c", "serve -s /app/apps/web/dist -l 8080 & npx tsx /app/apps/server/src/index.ts"]
