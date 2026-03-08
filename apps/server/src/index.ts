@@ -26,6 +26,7 @@ ensureUploadDirs();
 
 const server = Fastify({
   logger: true,
+  trustProxy: true,
 });
 
 async function start() {
