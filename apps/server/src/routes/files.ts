@@ -62,14 +62,6 @@ export async function fileRoutes(server: FastifyInstance): Promise<void> {
         return reply.status(410).send({ error: "Download link expired" });
       }
 
-      // Check per-token attempt limit
-      if (purchase.downloadAttempts >= purchase.maxDownloadAttempts) {
-        logger.warn(
-          `Download attempt limit exceeded for token ${token} (purchase ${purchase.id}) from IP ${clientIp}`,
-        );
-        return reply.status(429).send({ error: "Download attempt limit exceeded" });
-      }
-
       // IP binding: bind on first download, enforce on subsequent
       if (purchase.boundIpAddress && purchase.boundIpAddress !== clientIp) {
         logger.warn(
@@ -82,17 +74,27 @@ export async function fileRoutes(server: FastifyInstance): Promise<void> {
         return reply.status(404).send({ error: "File not found" });
       }
 
-      // Record attempt and bind IP on first use
-      await prisma.purchase.update({
-        where: { id: purchase.id },
+      // Record attempt and bind IP on first use (atomic update to prevent race condition)
+      const result = await prisma.purchase.updateMany({
+        where: {
+          id: purchase.id,
+          downloadAttempts: { lt: purchase.maxDownloadAttempts },
+        },
         data: {
-          downloadAttempts: purchase.downloadAttempts + 1,
+          downloadAttempts: { increment: 1 },
           boundIpAddress: purchase.boundIpAddress ?? clientIp,
         },
       });
 
+      if (result.count === 0) {
+        logger.warn(
+          `Download attempt limit exceeded for token ${token} (purchase ${purchase.id}) from IP ${clientIp}`,
+        );
+        return reply.status(429).send({ error: "Download attempt limit exceeded" });
+      }
+
       logger.info(
-        `Download successful for token ${token} (purchase ${purchase.id}, attempt ${purchase.downloadAttempts + 1}/${purchase.maxDownloadAttempts}) from IP ${clientIp}`,
+        `Download successful for token ${token} (purchase ${purchase.id}) from IP ${clientIp}`,
       );
 
       const fileName =

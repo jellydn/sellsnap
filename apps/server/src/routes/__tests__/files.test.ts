@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockGetSession = vi.fn();
 const mockPurchaseFindUnique = vi.fn();
 const mockPurchaseUpdate = vi.fn();
+const mockPurchaseUpdateMany = vi.fn();
 const mockPurchaseFindMany = vi.fn();
 
 vi.mock("../../lib/auth", () => ({
@@ -35,6 +36,7 @@ vi.mock("../../lib/prisma", () => ({
     purchase: {
       findUnique: (...args: unknown[]) => mockPurchaseFindUnique(...args),
       update: (...args: unknown[]) => mockPurchaseUpdate(...args),
+      updateMany: (...args: unknown[]) => mockPurchaseUpdateMany(...args),
       findMany: (...args: unknown[]) => mockPurchaseFindMany(...args),
     },
   },
@@ -94,7 +96,7 @@ describe("file routes", () => {
     it("allows download for a valid token", async () => {
       // Arrange
       mockPurchaseFindUnique.mockResolvedValueOnce(mockPurchase as any);
-      mockPurchaseUpdate.mockResolvedValueOnce({ ...mockPurchase, downloadAttempts: 1 } as any);
+      mockPurchaseUpdateMany.mockResolvedValueOnce({ count: 1 } as any);
 
       // Act
       const response = await app.inject({
@@ -106,10 +108,10 @@ describe("file routes", () => {
       expect(response.statusCode).toBe(200);
       expect(response.headers["content-disposition"]).toContain("Test Product");
       expect(response.headers["content-type"]).toBe("application/octet-stream");
-      expect(mockPurchaseUpdate).toHaveBeenCalledWith({
-        where: { id: "purchase-1" },
+      expect(mockPurchaseUpdateMany).toHaveBeenCalledWith({
+        where: { id: "purchase-1", downloadAttempts: { lt: 3 } },
         data: {
-          downloadAttempts: 1,
+          downloadAttempts: { increment: 1 },
           boundIpAddress: expect.any(String),
         },
       });
@@ -173,6 +175,7 @@ describe("file routes", () => {
         downloadAttempts: 3,
         maxDownloadAttempts: 3,
       } as any);
+      mockPurchaseUpdateMany.mockResolvedValueOnce({ count: 0 } as any);
 
       // Act
       const response = await app.inject({
@@ -212,7 +215,7 @@ describe("file routes", () => {
         ...mockPurchase,
         boundIpAddress: null,
       } as any);
-      mockPurchaseUpdate.mockResolvedValueOnce({ ...mockPurchase, downloadAttempts: 1 } as any);
+      mockPurchaseUpdateMany.mockResolvedValueOnce({ count: 1 } as any);
 
       // Act
       const response = await app.inject({
@@ -223,11 +226,12 @@ describe("file routes", () => {
 
       // Assert
       expect(response.statusCode).toBe(200);
-      expect(mockPurchaseUpdate).toHaveBeenCalledWith(
+      expect(mockPurchaseUpdateMany).toHaveBeenCalledWith(
         expect.objectContaining({
+          where: expect.objectContaining({ id: "purchase-1" }),
           data: expect.objectContaining({
             boundIpAddress: "192.168.1.1",
-            downloadAttempts: 1,
+            downloadAttempts: { increment: 1 },
           }),
         }),
       );
@@ -240,7 +244,7 @@ describe("file routes", () => {
         boundIpAddress: "192.168.1.1",
         downloadAttempts: 1,
       } as any);
-      mockPurchaseUpdate.mockResolvedValueOnce({ ...mockPurchase, downloadAttempts: 2 } as any);
+      mockPurchaseUpdateMany.mockResolvedValueOnce({ count: 1 } as any);
 
       // Act
       const response = await app.inject({
