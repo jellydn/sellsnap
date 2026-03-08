@@ -15,6 +15,7 @@ import { analyticsRoutes } from "./routes/analytics";
 import { authRoutes } from "./routes/auth";
 import { checkoutRoutes } from "./routes/checkout";
 import { creatorRoutes } from "./routes/creators";
+import { fileRoutes } from "./routes/files";
 import { healthRoutes } from "./routes/health";
 import { productRoutes } from "./routes/products";
 import { profileRoutes } from "./routes/profile";
@@ -62,6 +63,7 @@ async function start() {
   await server.register(checkoutRoutes);
   await server.register(webhookRoutes);
   await server.register(purchaseRoutes);
+  await server.register(fileRoutes);
   await server.register(profileRoutes);
   await server.register(analyticsRoutes);
 

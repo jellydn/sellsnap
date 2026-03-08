@@ -65,7 +65,7 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
       }
 
       const downloadToken = randomUUID();
-      const downloadExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const downloadExpiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
 
       const stripePaymentIntentId =
         typeof session.payment_intent === "string"
@@ -92,7 +92,7 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
 
 Product: ${product.title}
 Download Link: ${downloadLink}
-This link will expire in 24 hours.
+This link will expire in 2 hours.
 
 If you have any questions, please contact the seller.`;
 
