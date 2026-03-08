@@ -15,7 +15,16 @@ Tech stack: React 19, Vite, TypeScript (strict), Tailwind CSS v4, Prisma, Fastif
 
 ---
 
-## Build / Development Commands
+## Quick Start
+
+```bash
+just install       # Install dependencies
+just dev           # Start all dev servers
+```
+
+---
+
+## Build / Dev Commands
 
 Uses `pnpm`. Prefer `just` CLI for shortcuts.
 
@@ -31,14 +40,16 @@ just typecheck-server  # Server only
 
 # Build & lint
 just build-web         # Build web app
-just lint              # Biome lint + format
+just lint              # Biome lint + format check
 just format            # Biome format only
 
 # Testing
 just test              # Run all tests (web + server)
 just test-watch        # Watch mode (web + server)
-cd apps/web && pnpm vitest run <file>       # Single web test
-cd apps/server && pnpm vitest run <file>    # Single server test
+
+# Run single test file
+cd apps/web && pnpm vitest run <file>       # e.g., apps/web/src/components/button.test.tsx
+cd apps/server && pnpm vitest run <file>    # e.g., apps/server/src/routes/auth.test.ts
 
 # E2E Testing
 just e2e               # Run Playwright tests
@@ -46,8 +57,8 @@ just e2e-ui            # Run Playwright with UI
 
 # Database
 just prisma-migrate <name>   # Create migration
-just prisma-generate          # Generate Prisma client
-just prisma-push              # Push schema to DB
+just prisma-generate         # Generate Prisma client
+just prisma-push             # Push schema to DB
 ```
 
 ---
@@ -87,9 +98,10 @@ prek run --all-files # Run all hooks manually
 
 ### TypeScript
 
-- Use strict TypeScript - no `any` unless necessary
-- Use `type` for unions, `interface` for object shapes
+- Use strict TypeScript - no `any` unless absolutely necessary
+- Use `type` for unions/intersections, `interface` for object shapes
 - Prefer explicit return types for exported functions
+- Enable `strict: true` in tsconfig
 
 ### Imports (order: external → internal → relative)
 
@@ -101,33 +113,56 @@ import { type User } from "@/types/user";
 ```
 
 - Use path aliases (`@/` configured in web)
-- Use named exports over default
+- Use named exports over default exports
 
 ### Naming Conventions
 
-- Files: kebab-case (utils), PascalCase (components)
-- Variables/functions: camelCase
-- Components: PascalCase
-- Constants: SCREAMING_SNAKE_CASE
-- Test files: `*.test.ts` or `*.test.tsx` in `__tests__` folders
+| Type                | Convention                  | Example                     |
+| ------------------- | --------------------------- | --------------------------- |
+| Files (utils)       | kebab-case                  | `format-price.ts`           |
+| Files (components)  | PascalCase                  | `Button.tsx`                |
+| Variables/functions | camelCase                   | `getUserById`               |
+| Components          | PascalCase                  | `function UserProfile() {}` |
+| Constants           | SCREAMING_SNAKE_CASE        | `MAX_FILE_SIZE`             |
+| Test files          | `*.test.ts` or `*.test.tsx` | `button.test.tsx`           |
 
 ### React Conventions
 
 - Use functional components with hooks
-- Use `function` declarations for components
-- Extract custom hooks for reusable logic
+- Use `function` declarations (not arrow functions)
+- Extract custom hooks (`useAuth`, `useCart`)
+- Keep components small and focused
 
 ### Error Handling
 
 - Use try/catch with async/await
-- Return typed error results: `type Result<T> = { success: true; data: T } | { success: false; error: string }`
+- Return typed error results:
+  ```typescript
+  type Result<T> =
+    | { success: true; data: T }
+    | { success: false; error: string };
+  ```
 - Never expose internal errors to clients
 
 ---
 
 ## Testing (Vitest + @testing-library/react)
 
-Follow AAA pattern: Arrange, Act, Assert. Test behavior, not implementation details.
+Follow AAA pattern: **Arrange, Act, Assert**. Test behavior, not implementation details.
+
+```typescript
+test('should increment counter when button is clicked', () => {
+  // Arrange
+  render(<Counter />);
+  const button = screen.getByRole('button', { name: /increment/i });
+  // Act
+  fireEvent.click(button);
+  // Assert
+  expect(screen.getByTestId('counter')).toHaveTextContent('1');
+});
+```
+
+- Use `screen.getBy*` over `container.querySelector`
 
 ---
 
@@ -135,25 +170,27 @@ Follow AAA pattern: Arrange, Act, Assert. Test behavior, not implementation deta
 
 - Use Prisma client: `import { db } from "db"`
 - Use transactions for multi-step operations
+- Run `just prisma-generate` after schema changes
 
 ---
 
 ## CSS / Styling
 
-- Use Tailwind CSS v4
-- Configure in `apps/web/src/index.css` with `@import "tailwindcss"`
-- Keep custom CSS minimal
+- Use Tailwind CSS v4 with `@import "tailwindcss"`
+- Keep custom CSS minimal - use utility classes
+- Use `cn()` utility for conditional classes
 
 ---
 
 ## Path Aliases
 
-Web app uses `@/` as base: `@/components/*`, `@/lib/*`, `@/types/*` → `apps/web/src/*`
+Web app uses `@/` as base path: `@/components/*`, `@/lib/*`, `@/types/*` → `apps/web/src/*`
 
 ---
 
 ## Git Conventions
 
-- Use clear commit messages
-- Run `just typecheck` before committing
-- Separate tidying from behavior changes
+- Use clear, descriptive commit messages
+- Run `just typecheck` and `just lint` before committing
+- Separate tidying commits from behavior changes
+- Create feature branches for new features
