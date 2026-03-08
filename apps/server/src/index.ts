@@ -70,7 +70,7 @@ async function start() {
   if (process.env.NODE_ENV === "production") {
     const frontendPath = path.join(__dirname, "../../web/dist");
 
-    server.get("/", async (request, reply) => {
+    server.get("/", async (_request, reply) => {
       return reply.sendFile("index.html");
     });
 
