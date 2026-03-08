@@ -56,6 +56,10 @@ vi.mock("../../lib/upload", () => ({
   saveImage: (...args: unknown[]) => mockSaveImage(...args),
   validateImageFile: vi.fn(() => null),
   validateProductFile: vi.fn(() => null),
+  validateImageMagicBytes: vi.fn(() => null),
+  validateFileMagicBytes: vi.fn(() => null),
+  checkStorageQuota: vi.fn(async () => null),
+  DEFAULT_STORAGE_QUOTA_BYTES: 1 * 1024 * 1024 * 1024,
 }));
 
 vi.mock("node:fs", () => ({
