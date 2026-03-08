@@ -68,6 +68,10 @@ async function start() {
   if (process.env.NODE_ENV === "production") {
     const frontendPath = path.join(__dirname, "../../web/dist");
 
+    server.get("/", async (request, reply) => {
+      return reply.sendFile("index.html");
+    });
+
     server.setNotFoundHandler(async (request, reply) => {
       const url = request.url;
       if (url.startsWith("/api/") || url.startsWith("/uploads/")) {
