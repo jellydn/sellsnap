@@ -1,0 +1,70 @@
+import type { FastifyInstance } from "fastify";
+import { auth, headersToHeaders } from "../lib/auth";
+import { PURCHASE_STATUS } from "../lib/constants";
+import { prisma } from "../lib/prisma";
+
+export async function analyticsRoutes(server: FastifyInstance): Promise<void> {
+  server.get("/api/analytics", async (request, reply) => {
+    const session = await auth.api.getSession({
+      headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),
+    });
+
+    if (!session?.user) {
+      return reply.status(401).send({ error: "Unauthorized" });
+    }
+
+    const products = await prisma.product.findMany({
+      where: { creatorId: session.user.id },
+      include: {
+        _count: {
+          select: {
+            purchases: {
+              where: { status: PURCHASE_STATUS.COMPLETED },
+            },
+          },
+        },
+      },
+    });
+
+    const revenueByProduct = await prisma.purchase.groupBy({
+      by: ["productId"],
+      where: {
+        product: { creatorId: session.user.id },
+        status: PURCHASE_STATUS.COMPLETED,
+      },
+      _sum: { amount: true },
+    });
+
+    const revenueMap = new Map(revenueByProduct.map((r) => [r.productId, r._sum.amount || 0]));
+
+    let totalViews = 0;
+    let totalPurchases = 0;
+    let totalRevenue = 0;
+
+    const productStats = products.map((product) => {
+      const purchaseCount = product._count.purchases;
+      const revenue = revenueMap.get(product.id) || 0;
+
+      totalViews += product.viewCount;
+      totalPurchases += purchaseCount;
+      totalRevenue += revenue;
+
+      return {
+        id: product.id,
+        title: product.title,
+        viewCount: product.viewCount,
+        purchaseCount,
+        revenue,
+      };
+    });
+
+    return {
+      products: productStats,
+      totals: {
+        totalViews,
+        totalPurchases,
+        totalRevenue,
+      },
+    };
+  });
+}

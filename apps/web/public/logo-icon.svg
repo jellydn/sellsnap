@@ -1,0 +1,25 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Shopping cart with integrated lightning bolt -->
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563eb;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1d4ed8;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Lightning bolt replacing cart handle -->
+  <path d="M75 35 L95 75 L80 75 L95 110 L55 65 L75 65 L60 35 Z"
+        fill="url(#logoGradient)"/>
+
+  <!-- Shopping cart basket -->
+  <path d="M55 75 L65 130 Q67 140 77 140 L123 140 Q133 140 135 130 L145 75 L55 75 Z"
+        fill="url(#logoGradient)"/>
+
+  <!-- Cart wheels -->
+  <circle cx="82" cy="155" r="12" fill="url(#logoGradient)"/>
+  <circle cx="118" cy="155" r="12" fill="url(#logoGradient)"/>
+
+  <!-- Cart front edge detail -->
+  <path d="M75 85 L140 85 L132 125 L68 125 Z"
+        fill="#3b82f6" opacity="0.4"/>
+</svg>

@@ -1,0 +1,41 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -b",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@better-auth/prisma-adapter": "^1.5.3",
+    "@fastify/cors": "^11.2.0",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/multipart": "^9.4.0",
+    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/static": "^9.0.0",
+    "@prisma/client": "6.19.2",
+    "@sellsnap/logger": "workspace:*",
+    "better-auth": "^1.5.3",
+    "db": "workspace:*",
+    "fastify": "^5.2.1",
+    "stripe": "^20.4.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@better-auth/cli": "^1.4.21",
+    "@biomejs/biome": "^2.4.5",
+    "@types/node": "^25.3.3",
+    "prisma": "^6.19.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^4.0.18"
+  }
+}

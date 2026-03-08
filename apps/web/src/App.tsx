@@ -1,0 +1,81 @@
+import { Route, Routes } from "react-router-dom";
+import { AppLayout } from "./components/AppLayout";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import { CreatorProfile } from "./pages/CreatorProfile";
+import { Dashboard } from "./pages/Dashboard";
+import { ProductCreate } from "./pages/ProductCreate";
+import { ProductEdit } from "./pages/ProductEdit";
+import { ProductPage } from "./pages/ProductPage";
+import { PurchaseSuccess } from "./pages/PurchaseSuccess";
+import { Settings } from "./pages/Settings";
+import { SignIn } from "./pages/SignIn";
+import { SignUp } from "./pages/SignUp";
+
+function NotFound() {
+  return (
+    <div style={{ padding: "2rem", textAlign: "center" }}>
+      <h1 style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "1rem" }}>404</h1>
+      <p style={{ color: "#6b7280", marginBottom: "1rem" }}>Page not found</p>
+      <a href="/" style={{ color: "#2563eb", textDecoration: "none" }}>
+        Go home
+      </a>
+    </div>
+  );
+}
+
+function Home() {
+  return (
+    <div style={{ padding: "2rem", fontFamily: "system-ui" }}>
+      <h1>Welcome to SellSnap</h1>
+      <p>Sell in a snap — the fastest way for creators to sell digital products online.</p>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AppLayout>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/sign-up" element={<SignUp />} />
+        <Route path="/sign-in" element={<SignIn />} />
+        <Route path="/p/:slug" element={<ProductPage />} />
+        <Route path="/creator/:slug" element={<CreatorProfile />} />
+        <Route path="/purchase/success" element={<PurchaseSuccess />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/products/new"
+          element={
+            <ProtectedRoute>
+              <ProductCreate />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/products/:id"
+          element={
+            <ProtectedRoute>
+              <ProductEdit />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </AppLayout>
+  );
+}

@@ -1,0 +1,26 @@
+{
+  "name": "sellsnap",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter web dev & pnpm --filter server dev",
+    "typecheck": "pnpm -r typecheck",
+    "typecheck:web": "pnpm --filter web typecheck",
+    "typecheck:server": "pnpm --filter server typecheck",
+    "lint": "pnpm -r biome check --write .",
+    "test": "pnpm -r test",
+    "test:watch": "pnpm -r test:watch",
+    "db:generate": "dotenv -f .env run -- pnpm --filter db db:generate",
+    "db:push": "dotenv -f .env run -- pnpm --filter db db:push",
+    "db:migrate": "dotenv -f .env run -- pnpm --filter db db:migrate"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "pnpm@10.30.3",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

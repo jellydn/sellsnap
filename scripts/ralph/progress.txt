@@ -1,0 +1,399 @@
+## Codebase Patterns
+- Use bun instead of pnpm for installing dependencies (pnpm had issues with packageManager field)
+- Web app runs on port 5173, server on port 3000
+- Vite proxy /api to server at localhost:3000
+- ChromeDevTools MCP not configured. Frontend testing skipped.
+
+## 2026-03-05 10:30 - US-001
+[Session: ]
+- Implemented monorepo setup with pnpm workspaces
+- Created apps/web with React/Vite and react-router-dom
+- Created apps/server with Fastify and @fastify/cors
+- Created packages/db with Prisma schema (PostgreSQL datasource)
+- Created packages/tsconfig with shared TypeScript config
+- Configured Vite proxy to forward /api to server
+- Root dev script uses pnpm --filter to run both servers concurrently
+- All typechecks pass for web, server, and db packages
+- Verified health endpoint at /api/health returns { status: 'ok' }
+- Verified web app serves hello page at localhost:5173
+- Files changed:
+  - package.json (root)
+  - pnpm-workspace.yaml
+  - packages/tsconfig/base.json
+  - packages/tsconfig.json
+  - packages/db/package.json, tsconfig.json, prisma/schema.prisma, src/index.ts
+  - apps/web/package.json, tsconfig.json, vite.config.ts, index.html, src/main.tsx, src/App.tsx
+  - apps/server/package.json, tsconfig.json, src/index.ts, .env.example
+  - AGENTS.md (updated)
+- **Learnings for future iterations:**
+  - pnpm workspace requires packageManager field matching - bun works better for development
+  - Vite proxy configuration needs changeOrigin: true for CORS
+  - @fastify/cors with origin: true allows all origins during dev
+  - Remove project references from tsconfig when using extends for base config
+---
+
+## 2026-03-05 10:45 - US-002
+[Session: ]
+- Added User, Product, Purchase tables to Prisma schema
+- User: id (cuid), name, email (unique), slug (unique), avatarUrl (optional), createdAt, products relation
+- Product: id (cuid), title, slug (unique), description, price (Int), coverImageUrl, filePath, previewContent, published (default false), viewCount (default 0), creatorId (FK), createdAt, updatedAt, purchases relation
+- Purchase: id (cuid), productId (FK), customerEmail, customerName, stripePaymentIntentId, amount (Int), status (String), downloadToken (unique), downloadExpiresAt, createdAt
+- Created Prisma migration "init" and applied to PostgreSQL
+- Generated Prisma client successfully
+- All typechecks pass
+- Files changed:
+  - packages/db/prisma/schema.prisma (updated with User, Product, Purchase models)
+  - packages/db/.env (added DATABASE_URL)
+  - packages/db/prisma/migrations/* (new migration files)
+- **Learnings for future iterations:**
+  - PostgreSQL container already running from previous session (docker ps to check)
+  - Prisma migration requires DATABASE_URL in packages/db/.env
+  - Use docker run with -d flag to run in background
+---
+
+## 2026-03-05 11:30 - US-003
+[Session: ]
+- Installed better-auth and @better-auth/prisma-adapter in server
+- Configured better-auth with Prisma adapter for PostgreSQL
+- Enabled email/password authentication
+- Mounted better-auth handler on /api/auth/* routes
+- Added baseURL config for proper redirect handling
+- Created .env with BETTER_AUTH_SECRET
+- All typechecks pass
+- Server runs at http://localhost:3000 with better-auth endpoints
+- Files changed:
+  - apps/server/package.json (added better-auth, @better-auth/prisma-adapter, @prisma/client)
+  - apps/server/src/index.ts (added better-auth setup and auth route)
+  - apps/server/.env (added BETTER_AUTH_SECRET)
+- **Learnings for future iterations:**
+  - Use @better-auth/prisma-adapter (not @auth/prisma-adapter) with better-auth 1.5.3
+  - better-auth requires @prisma/client 6.19.2 to match Prisma schema version
+  - baseURL must be set or BETTER_AUTH_URL env var for redirects to work
+  - Prisma adapter uses prismaAdapter function from better-auth/adapters/prisma
+  - Clean install of node_modules helps resolve dependency conflicts
+---
+
+## 2026-03-05 12:00 - US-004
+[Session: ]
+- Installed better-auth in web app
+- Created auth client using createAuthClient from better-auth/client
+- Created SignUp page at /sign-up with name, email, password fields
+- Created SignIn page at /sign-in with email, password fields
+- Auth client configured with baseURL pointing to server (http://localhost:3000)
+- Sign-up and sign-in forms submit to better-auth API and redirect to /dashboard
+- Files changed:
+  - apps/web/src/lib/auth.ts (new - auth client)
+  - apps/web/src/pages/SignUp.tsx (new)
+  - apps/web/src/pages/SignIn.tsx (new)
+  - apps/web/src/App.tsx (updated with routes)
+- **Learnings for future iterations:**
+  - Use better-auth/client (not better-auth/react) for the auth client
+  - Use authClient.signUp.email() and authClient.signIn.email() for email/password auth
+  - Client methods are inferred from the server configuration
+---
+
+## 2026-03-05 12:30 - US-005
+[Session: ]
+- Implemented App layout component with header showing brand, auth state
+- Added auth-aware header with user name and Sign Out button when authenticated
+- Shows Sign In link when not authenticated
+- Created ProtectedRoute wrapper that redirects to /sign-in if unauthenticated
+- Added Dashboard page at /dashboard (protected)
+- Updated auth client to use better-auth/react for React hooks (useSession)
+- Fixed a11y issues in SignIn/SignUp forms (added htmlFor/id to labels)
+- All typechecks pass
+- Verified dev servers run correctly (web on 5175, server on 3000)
+- Files changed:
+  - apps/web/src/lib/auth.ts (changed import to better-auth/react)
+  - apps/web/src/components/AppLayout.tsx (new - layout with header)
+  - apps/web/src/components/ProtectedRoute.tsx (new - route protection)
+  - apps/web/src/App.tsx (updated with layout and dashboard route)
+  - apps/web/src/pages/SignIn.tsx (fixed label accessibility)
+  - apps/web/src/pages/SignUp.tsx (fixed label accessibility)
+  - apps/web/package.json (added @better-fetch/fetch)
+  - scripts/ralph/prd.json (marked US-005 as passes: true)
+- **Learnings for future iterations:**
+  - Use better-auth/react (not better-auth/client) for React hooks like useSession
+  - useSession returns data, isPending, error, refetch - use data?.user for user info
+  - biome lint requires htmlFor on labels - need to add id to inputs
+  - Dev server ports may change if default ports are in use (5173->5175)
+---
+
+## 2026-03-05 13:00 - US-006
+[Session: ]
+- Implemented GET /api/products endpoint in server that returns all products for authenticated user
+- Endpoint includes purchase count (count of completed purchases)
+- Created API client in web app at src/lib/api.ts
+- Created Dashboard page with product list showing title, price (formatted), published status badge, view count, purchase count
+- Added "Create Product" button linking to /dashboard/products/new
+- Empty state message when no products exist
+- All typechecks and lint pass
+- API tested and returns 401 when not authenticated
+- Files changed:
+  - apps/server/src/index.ts (added GET /api/products endpoint)
+  - apps/web/src/lib/api.ts (new - API client)
+  - apps/web/src/pages/Dashboard.tsx (new - dashboard with product list)
+  - apps/web/src/App.tsx (updated to use Dashboard component)
+  - apps/web/src/components/Layout.tsx (fixed button type for lint)
+  - scripts/ralph/prd.json (marked US-006 as passes: true)
+- **Learnings for future iterations:**
+  - better-auth on server uses auth.api.getSession({ headers }) to get session
+  - Convert Fastify headers to standard Headers object using headersToHeaders helper
+  - Prisma _count with nested where clause for filtering related records
+  - ChromeDevTools MCP not configured - browser testing skipped
+---
+
+## 2026-03-05 14:00 - US-007
+[Session: ]
+- Installed @fastify/multipart and @fastify/static for file uploads
+- Created uploads/images and uploads/files directories in apps/server
+- Implemented POST /api/products endpoint with multipart form data handling
+- Endpoint accepts: title, description, price, previewContent (optional), coverImage (file), productFile (file)
+- Auto-generates slug from title (kebab-case), appends random suffix if needed for uniqueness
+- Saves cover images to uploads/images/ and product files to uploads/files/
+- Configured @fastify/static to serve uploads/images/ at /uploads/images/*
+- Created product with published: false
+- Price converted from dollars (string) to cents (integer)
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/package.json (added @fastify/multipart, @fastify/static)
+  - apps/server/src/index.ts (added multipart handling, static serving, POST /api/products endpoint)
+  - apps/server/uploads/images/ (new directory)
+  - apps/server/uploads/files/ (new directory)
+  - scripts/ralph/prd.json (marked US-007 as passes: true)
+- **Learnings for future iterations:**
+  - Use request.parts() to iterate over multipart fields in @fastify/multipart
+  - For file uploads, iterate over file.file to collect chunks and Buffer.concat()
+  - @fastify/static serves from a directory - use decorateReply: false to avoid conflicts
+  - Static files served at /uploads/images/* from IMAGES_DIR
+  - FILES_DIR is NOT served publicly - files are protected from direct access
+  - Use Number.isNaN instead of isNaN for type safety
+---
+
+## 2026-03-05 14:30 - US-008
+[Session: ]
+- Created ProductCreate page at /dashboard/products/new (protected route)
+- Form fields: title, description, price (in dollars), preview content (optional), cover image (file), digital file (file)
+- Uses FormData to submit as multipart/form-data to POST /api/products
+- Shows loading state during submission
+- On success, redirects to /dashboard/products/:id (edit page)
+- On error, shows error message
+- All typechecks and lint pass
+- Files changed:
+  - apps/web/src/lib/api.ts (added createProduct function and CreateProductData type)
+  - apps/web/src/pages/ProductCreate.tsx (new - product creation form)
+  - apps/web/src/App.tsx (added route for /dashboard/products/new)
+  - scripts/ralph/prd.json (marked US-008 as passes: true)
+- **Learnings for future iterations:**
+  - Use FormData for multipart file uploads
+  - File inputs return File objects which can be directly appended to FormData
+  - biome organizes imports - type imports should come after named imports
+  - ChromeDevTools MCP not configured - browser testing skipped
+---
+
+## 2026-03-05 15:00 - US-009
+[Session: ]
+- Implemented GET /api/products/:id endpoint returning product (only if owned by authenticated user)
+- Implemented PUT /api/products/:id endpoint for updating product fields with multipart form data
+- Can update: title, description, price, slug, previewContent, coverImage (file), productFile (file)
+- Slug update validates uniqueness before saving
+- Implemented PATCH /api/products/:id/publish endpoint to toggle published field
+- All endpoints enforce ownership check - only product owner can access
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/src/index.ts (added GET, PUT, PATCH endpoints for products/:id)
+  - scripts/ralph/prd.json (marked US-009 as passes: true)
+- **Learnings for future iterations:**
+  - File fields are optional on update - only replace if a new file is uploaded
+  - Need to handle case where field is explicitly set to empty string vs not provided
+  - Use isNaN check with Number.isNaN for type safety
+---
+
+## 2026-03-05 15:30 - US-010
+[Session: ]
+- Created ProductEdit page at /dashboard/products/:id (protected, only owner)
+- Form pre-filled with existing product data fetched from GET /api/products/:id
+- Can update all fields including slug, title, description, price, preview content
+- Cover image and product file can be replaced
+- Publish/Unpublish toggle button calls PATCH /api/products/:id/publish
+- When published, displays the public product URL /p/:slug as a copyable link
+- Product cards on dashboard now link to edit page
+- All typechecks and lint pass
+- Files changed:
+  - apps/web/src/lib/api.ts (added fetchProduct, updateProduct, toggleProductPublish functions)
+  - apps/web/src/pages/ProductEdit.tsx (new - product edit form)
+  - apps/web/src/pages/Dashboard.tsx (added Link to product cards)
+  - apps/web/src/App.tsx (added route for /dashboard/products/:id)
+  - scripts/ralph/prd.json (marked US-010 as passes: true)
+- **Learnings for future iterations:**
+  - Use Link from react-router-dom to make product cards clickable
+  - Need explicit type="button" on buttons to satisfy biome lint
+---
+
+## 2026-03-05 16:00 - US-011
+[Session: ]
+- Implemented GET /api/products/by-slug/:slug endpoint (public, no auth)
+- Endpoint increments viewCount on each request
+- Returns product data including creator info (name, slug, avatar)
+- Created frontend page at /p/:slug (public, no auth required)
+- Displays: product title, description, preview content, cover image, price, creator name
+- Buy Now button visible (functionality will be added in checkout story)
+- Shows 404 page if product doesn't exist or is unpublished
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/src/index.ts (added GET /api/products/by-slug/:slug endpoint)
+  - apps/web/src/pages/ProductPage.tsx (new - public product page)
+  - apps/web/src/App.tsx (added route for /p/:slug)
+  - scripts/ralph/prd.json (marked US-011 as passes: true)
+- **Learnings for future iterations:**
+  - Public endpoints don't require auth - don't call auth.api.getSession
+  - Include creator info in the same query to avoid extra fetch
+---
+
+## 2026-03-05 16:15 - US-012
+[Session: ]
+- Implemented GET /api/creators/:slug endpoint (public, no auth)
+- Returns creator info (name, slug, avatar) and their published products
+- Created frontend page at /creator/:slug (public, no auth required)
+- Shows creator name, avatar (or initials), and list of published products
+- Each product card links to /p/:productSlug
+- Shows 404 if creator slug doesn't exist
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/src/index.ts (added GET /api/creators/:slug endpoint)
+  - apps/web/src/pages/CreatorProfile.tsx (new - creator profile page)
+  - apps/web/src/App.tsx (added route for /creator/:slug)
+  - scripts/ralph/prd.json (marked US-012 as passes: true)
+- **Learnings for future iterations:**
+  - Use /creator/:slug route to avoid conflicts with other top-level routes
+  - Return only published products for public profile
+---
+
+## 2026-03-05 16:45 - US-013
+[Session: ]
+- Installed stripe SDK in server package
+- Implemented POST /api/checkout/:productSlug endpoint
+- Creates Stripe Checkout Session with product title, price, metadata (productId)
+- Accepts customerEmail in request body and passes to Checkout Session
+- Returns checkout session URL for frontend redirect
+- On success, Stripe redirects to /purchase/success?session_id={id}
+- On cancel, Stripe redirects back to /p/:slug
+- Updated ProductPage to include email input and Buy Now button
+- STRIPE_SECRET_KEY already in .env
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/package.json (added stripe)
+  - apps/server/src/index.ts (added Stripe init and checkout endpoint)
+  - apps/web/src/lib/api.ts (added createCheckoutSession function)
+  - apps/web/src/pages/ProductPage.tsx (added email input and checkout handling)
+  - scripts/ralph/prd.json (marked US-013 as passes: true)
+- **Learnings for future iterations:**
+  - stripe SDK provides its own TypeScript types - no need for @types/stripe
+  - Use Number.isNaN instead of isNaN for type safety
+---
+
+## 2026-03-05 17:00 - US-014
+[Session: ]
+- Implemented POST /api/webhooks/stripe endpoint
+- Handles checkout.session.completed event from Stripe
+- Added raw body parser for webhook signature verification
+- Verifies webhook signature using STRIPE_WEBHOOK_SECRET from .env
+- Creates Purchase record with status 'completed', stripePaymentIntentId
+- Generates unique downloadToken (UUID) and downloadExpiresAt (24 hours)
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/src/index.ts (added webhook endpoint and raw body parser)
+  - scripts/ralph/prd.json (marked US-014 as passes: true)
+- **Learnings for future iterations:**
+  - Need raw body for Stripe webhook signature verification
+  - Use addContentTypeParser with parseAs: "string" to get raw body
+---
+
+## 2026-03-05 17:20 - US-015
+[Session: ]
+- Implemented GET /api/purchases/by-session/:sessionId endpoint
+- Returns purchase details including product title and download token
+- Implemented GET /api/download/:token endpoint for file delivery
+- Validates token and checks downloadExpiresAt (returns 404 if invalid, 410 if expired)
+- Added @fastify/rate-limit for rate limiting (10 requests per minute)
+- Returns file with Content-Disposition: attachment header
+- Created PurchaseSuccess page at /purchase/success
+- Displays thank you message with product title and Download button
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/package.json (added @fastify/rate-limit)
+  - apps/server/src/index.ts (added download endpoints and rate limiting)
+  - apps/web/src/pages/PurchaseSuccess.tsx (new)
+  - apps/web/src/App.tsx (added route)
+  - scripts/ralph/prd.json (marked US-015 as passes: true)
+- **Learnings for future iterations:**
+  - Use reply.send with createReadStream for file downloads
+---
+
+## 2026-03-05 17:25 - US-016
+[Session: ]
+- Added sendEmail function to server
+- In development, logs email content to console
+- In production, logs would-be email (extensible for Resend/similar)
+- Webhook sends email after purchase with: product title, download link, expiration notice
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/src/index.ts (added sendEmail function and email sending in webhook)
+  - scripts/ralph/prd.json (marked US-016 as passes: true)
+- **Learnings for future iterations:**
+  - Abstract email service behind sendEmail function for easy swap
+---
+
+## 2026-03-05 17:40 - US-017
+[Session: ]
+- Implemented GET /api/analytics endpoint
+- Returns per-product stats: title, view count, purchase count, revenue
+- Returns aggregate totals: total views, total purchases, total revenue
+- Added AnalyticsSection component to Dashboard
+- Displays analytics table with all products and totals
+- Revenue formatted as dollars
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/src/index.ts (added GET /api/analytics endpoint)
+  - apps/web/src/lib/api.ts (added fetchAnalytics function)
+  - apps/web/src/pages/Dashboard.tsx (added AnalyticsSection)
+  - scripts/ralph/prd.json (marked US-017 as passes: true)
+- **Learnings for future iterations:**
+  - Use reduce to calculate revenue from purchases array
+---
+
+## 2026-03-05 17:50 - US-018
+[Session: ]
+- Implemented GET /api/profile and PUT /api/profile endpoints
+- PUT accepts multipart form with name, slug, avatar (file)
+- Validates slug uniqueness before updating
+- Avatar image saved to uploads/images/ directory
+- Created Settings page at /dashboard/settings
+- Form shows current profile data, allows updating name, slug, avatar
+- Shows success message after update
+- Added Settings link to header navigation
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/src/index.ts (added profile endpoints)
+  - apps/web/src/pages/Settings.tsx (new - settings page)
+  - apps/web/src/App.tsx (added settings route)
+  - apps/web/src/components/AppLayout.tsx (added settings link)
+  - scripts/ralph/prd.json (marked US-018 as passes: true)
+ - **Learnings for future iterations:**
+   - Slug change affects public creator profile URL
+ ---
+
+## 2026-03-05 21:50 - Findings Fix (US-015 Bug & Warning)
+[Session: ]
+- Fixed purchase lookup bug: GET /api/purchases/by-session/:sessionId now queries stripeSessionId instead of stripePaymentIntentId
+- Fixed rate limiting: moved from global registration to route-level config on /api/download/:token only
+- Updated PRD findings to remove resolved bug and warning
+- All typechecks and lint pass
+- Files changed:
+  - apps/server/src/index.ts (fixed purchase lookup and scoped rate limiting)
+  - scripts/ralph/prd.json (updated findings)
+- **Learnings for future iterations:**
+  - stripeSessionId (cs_xxx) is different from stripePaymentIntentId (pi_xxx)
+  - Use @fastify/rate-limit route-level config to scope rate limiting to specific endpoints
+  - stripeSessionId was already being stored in webhook but not used for lookup
+---
