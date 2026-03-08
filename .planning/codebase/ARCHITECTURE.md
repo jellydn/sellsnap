@@ -1,208 +1,303 @@
-# Architecture
+# ARCHITECTURE.md - System Architecture
 
-**Analysis Date:** 2026-03-06
-
-## Pattern Overview
-
-SellSnap follows a **pnpm monorepo** architecture with a clear client–server split. The frontend is a React SPA (Vite) that communicates with a Fastify REST API server. All `/api` requests are proxied from the Vite dev server (port 5173) to Fastify (port 3000).
-
-- **Architectural style:** Modular monolith — single deployable server, route-per-domain decomposition
-- **Auth strategy:** better-auth with Prisma adapter (email/password), session-based via cookies
-- **Payments:** Stripe Checkout (redirect-based) with webhook fulfillment
-- **Database:** PostgreSQL via Prisma ORM
-- **File storage:** Local filesystem (`uploads/images/`, `uploads/files/`)
-
-## Layers
+## Architecture Overview
+SellSnap follows a **monorepo with microservices-style separation** pattern using pnpm workspaces. The application is built with a **layered architecture** approach.
 
 ```
-┌──────────────────────────────────────────────┐
-│  Web (React SPA)                             │
-│  ├── Pages (route-level components)          │
-│  ├── Components (shared UI)                  │
-│  └── Lib (auth client, API helpers, session) │
-├──────────────────────────────────────────────┤
-│  Vite Dev Proxy  /api → :3000               │
-├──────────────────────────────────────────────┤
-│  Server (Fastify)                            │
-│  ├── Routes (9 domain modules)               │
-│  └── Lib (prisma, auth, stripe, upload, email)│
-├──────────────────────────────────────────────┤
-│  Shared Packages                             │
-│  ├── @sellsnap/logger (consola wrapper)      │
-│  └── db (Prisma schema, not directly used)   │
-├──────────────────────────────────────────────┤
-│  PostgreSQL                                  │
-│  Stripe (external)                           │
-│  Local filesystem (uploads)                  │
-└──────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│                   Browser Layer                      │
+│                    React SPA                         │
+│              (Vite Dev Server)                       │
+└────────────────────┬────────────────────────────────┘
+                     │ HTTP/JSON
+                     ▼
+┌─────────────────────────────────────────────────────┐
+│                  API Gateway Layer                   │
+│                   Fastify Server                     │
+│  (Helmet, CORS, Rate Limiting, Auth Middleware)     │
+└────────────────────┬────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────┐
+│               Business Logic Layer                   │
+│    (Auth, File Upload, Stripe, Email, Pagination)   │
+└────────────────────┬────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────┐
+│                  Data Access Layer                   │
+│                   Prisma ORM                         │
+└────────────────────┬────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────┐
+│              PostgreSQL Database                     │
+│              (Docker Container)                      │
+└─────────────────────────────────────────────────────┘
 ```
 
-### Server Layers
+---
 
-1. **Entry point** (`src/index.ts`, ~79 lines) — registers plugins (CORS, rate-limit, multipart, static) and mounts all route modules
-2. **Route modules** (`src/routes/*.ts`) — each exports an `async function xRoutes(server: FastifyInstance)` that registers endpoints under `/api/`
-3. **Lib modules** (`src/lib/*.ts`) — singleton services: `prisma`, `stripe`, `auth`, `upload`, `email`
+## Architectural Patterns
 
-### Web Layers
+### 1. Monorepo with Workspaces
+**Pattern**: pnpm workspaces for code sharing and unified dependency management
 
-1. **Entry** (`main.tsx`) — React 19 + StrictMode + BrowserRouter
-2. **App** (`App.tsx`) — route definitions with `ProtectedRoute` wrapper
-3. **Pages** — full-page components (Dashboard, ProductCreate, ProductEdit, etc.)
-4. **Components** — `AppLayout` (header/nav), `ProtectedRoute` (auth guard), `Layout` (alternate layout)
-5. **Lib** — `auth.ts` (better-auth React client), `api.ts` (fetch wrappers), `session.ts` (useSession hook)
+**Benefits**:
+- Single source of truth for shared packages (`db`, `logger`)
+- Unified CI/CD pipeline
+- Easier dependency management with `workspace:*` protocol
+
+**Implementation**: `pnpm-workspace.yaml` defines workspace patterns
+
+---
+
+### 2. Layered Architecture
+**Pattern**: Clear separation between presentation, business logic, and data layers
+
+**Layers**:
+1. **Presentation**: React components in `apps/web/src/pages/`, `apps/web/src/components/`
+2. **API**: Fastify routes in `apps/server/src/routes/`
+3. **Business Logic**: Utilities in `apps/server/src/lib/`
+4. **Data Access**: Prisma client in `packages/db/`
+
+---
+
+### 3. RESTful API Design
+**Pattern**: Resource-oriented URLs with standard HTTP methods
+
+**Base Path**: `/api/`
+
+**Endpoints**:
+- `GET /api/products` - List products (cursor pagination)
+- `GET /api/products/:id` - Get product details
+- `POST /api/checkout` - Create checkout session
+- `POST /api/auth/*` - Authentication endpoints
+- `POST /api/webhooks` - Stripe webhooks
+
+---
+
+### 4. Middleware Pipeline
+**Pattern**: Request processing through middleware chain
+
+**Order** (`apps/server/src/index.ts`):
+1. Helmet (security headers)
+2. CORS (cross-origin handling)
+3. Rate Limiting (request throttling)
+4. Auth Middleware (session validation)
+5. Route Handler (business logic)
+
+---
+
+### 5. Repository Pattern (via Prisma)
+**Pattern**: Prisma ORM abstracts database access
+
+**Implementation**: `packages/db/src/index.ts` exports `db` instance
+
+**Usage**:
+```typescript
+import { db } from "db";
+const products = await db.product.findMany();
+```
+
+---
 
 ## Data Flow
 
-### Product Purchase Flow
-
-```
-Browser → /p/:slug (ProductPage)
-  → GET /api/products/by-slug/:slug (increments viewCount)
-  → POST /api/checkout/:productSlug
-    → Stripe Checkout Session created
-    → Redirect to Stripe hosted payment page
-  → Stripe webhook → POST /api/webhooks/stripe
-    → checkout.session.completed event
-    → Purchase record created with downloadToken (24h expiry)
-    → Email sent with download link
-  → /purchase/success?session_id=...
-    → GET /api/purchases/by-session/:sessionId
-  → GET /api/download/:token → streams file
-```
-
 ### Authentication Flow
-
 ```
-Browser → /sign-up or /sign-in
-  → better-auth client → POST /api/auth/*
-  → Fastify route converts to Web Request → auth.handler(req)
-  → better-auth processes with Prisma adapter
-  → Session cookie set on response
-  → Subsequent requests: auth.api.getSession({ headers }) on server
-  → Client: authClient.useSession() hook for session state
-```
-
-### Creator Product Management
-
-```
-Dashboard (authenticated)
-  → GET /api/products (creator's products)
-  → POST /api/products (multipart: title, description, price, coverImage, productFile)
-    → saveImage() → /uploads/images/{uuid}.ext
-    → saveFile() → uploads/files/{uuid}.ext
-    → Prisma create with auto-slug generation
-  → PUT /api/products/:id (update, ownership verified)
-  → PATCH /api/products/:id/publish (toggle)
+User → Login Form
+  ↓ (POST /api/auth/sign-in)
+Fastify Auth Route
+  ↓
+better-auth validates credentials
+  ↓
+Create session in database
+  ↓
+Set HTTP-only cookie
+  ↓
+Return user data
+  ↓
+Redirect to dashboard
 ```
 
-## Key Abstractions
-
-### Route Module Pattern
-
-Every route module follows this signature — no base class, just a function:
-
-```typescript
-export async function xRoutes(server: FastifyInstance): Promise<void> {
-  server.get("/api/x", async (request, reply) => { ... });
-}
+### Product Purchase Flow
+```
+User → Click "Buy"
+  ↓ (POST /api/checkout)
+Server creates Stripe Checkout session
+  ↓
+Return checkout URL
+  ↓
+User completes payment on Stripe
+  ↓
+Stripe sends webhook
+  ↓ (POST /api/webhooks)
+Server verifies webhook signature
+  ↓
+Create order in database
+  ↓
+Send confirmation (future)
 ```
 
-### Auth Guard Pattern (Server)
-
-Repeated in every authenticated route — inline session check, no middleware:
-
-```typescript
-const session = await auth.api.getSession({
-  headers: headersToHeaders(request.headers as Record<string, string | string[] | undefined>),
-});
-if (!session?.user) {
-  return reply.status(401).send({ error: "Unauthorized" });
-}
+### File Download Flow
+```
+User → Request download
+  ↓ (POST /api/files/download)
+Server validates purchase
+  ↓
+Generate download token (UUID, 24h expiry)
+  ↓
+Return download URL with token
+  ↓ (GET /api/files/:token)
+Server validates token
+  ↓
+Stream file from disk
+  ↓
+Increment view count (in-memory batch)
+  ↓
+Return file to user
 ```
 
-### Auth Guard Pattern (Web)
-
-`ProtectedRoute` component wraps dashboard routes, redirects to `/sign-in` if unauthenticated.
-
-### API Client Pattern (Web)
-
-`api.ts` exports typed async functions (e.g., `fetchProducts`, `createProduct`) that call `fetch()` against `/api` with `credentials: "include"`. No centralized HTTP client library — raw `fetch` with manual error handling.
-
-### File Upload Pattern
-
-Multipart parsing via `@fastify/multipart` — `request.parts()` async iterator separates fields from files. Files saved to local filesystem with UUID names.
+---
 
 ## Entry Points
 
-| Entry Point | Location | Purpose |
-|---|---|---|
-| Server start | `apps/server/src/index.ts` | Fastify bootstrap, plugin registration, route mounting |
-| Web app | `apps/web/src/main.tsx` | React DOM render with BrowserRouter |
-| Web routes | `apps/web/src/App.tsx` | React Router route definitions |
-| Prisma schema | `packages/db/prisma/schema.prisma` | Database schema (User, Product, Purchase) |
-| Stripe webhook | `apps/server/src/routes/webhooks.ts` | POST `/api/webhooks/stripe` |
-| better-auth handler | `apps/server/src/routes/auth.ts` | Catch-all `/api/auth/*` |
+### Frontend
+**File**: `apps/web/src/main.tsx`
 
-## Error Handling
+**Responsibilities**:
+- React app initialization
+- Router setup (React Router)
+- Auth provider setup
+- Root component mounting
 
-### Server
+### Backend
+**File**: `apps/server/src/index.ts`
 
-- **Route-level try/catch** — most routes rely on Fastify's default error handling
-- **Explicit error responses** — `reply.status(4xx).send({ error: "message" })` with consistent `{ error: string }` shape
-- **Webhook errors** — logged via `@sellsnap/logger`, returns appropriate HTTP status
-- **Auth errors** — caught in auth route, returns `{ error, code: "AUTH_FAILURE" }`
-- **Prisma unique constraint** (`P2002`) — handled in product creation with UUID slug fallback
-- **No global error handler** — relies on Fastify's built-in error serialization
+**Responsibilities**:
+- Fastify server initialization
+- Middleware registration
+- Route registration
+- Database connection
+- Server startup (port 3000)
 
-### Web
+---
 
-- **API calls** — try/catch with error message extraction from response JSON
-- **Auth state** — `useSession()` hook returns `isPending`/`data`, no error boundary pattern
-- **No global error boundary** configured
+## State Management
 
-## Cross-Cutting Concerns
+### Client-Side State
+**Pattern**: React hooks (local component state)
+
+**Tools**:
+- `useState` - Component state
+- `useEffect` - Side effects
+- Custom hooks - Reusable logic (`apps/web/src/lib/auth.ts`)
+
+### Server-Side State
+**Pattern**: Stateless API with database sessions
+
+**Session Storage**: PostgreSQL via better-auth
+
+**In-Memory State**:
+- View count queue (batched DB updates every 10s)
+
+---
+
+## Security Architecture
 
 ### Authentication
+- **Method**: Session-based (HTTP-only cookies)
+- **Provider**: better-auth with Prisma adapter
+- **Password Hashing**: bcrypt
 
-- **Server:** `better-auth` with `prismaAdapter`, email/password enabled. Session extracted per-request via `auth.api.getSession()`. No middleware — each route does its own check.
-- **Web:** `createAuthClient()` from `better-auth/react`, `useSession()` hook, `ProtectedRoute` component.
+### Authorization
+- **Protected Routes**: Middleware checks session validity
+- **Route Guards**: `apps/server/src/routes/auth.ts` middleware
 
-### Rate Limiting
+### API Security
+- **Rate Limiting**: 100 req/min (production), 1000 req/min (test)
+- **CORS**: Configurable origins
+- **Helmet**: Security headers
+- **Webhook Verification**: Stripe signature validation
 
-- **Global:** 100 req/min via `@fastify/rate-limit`
-- **Per-route overrides:** product slug lookup (60/min), checkout (20/min), download (10/min)
+---
 
-### CORS
+## Performance Considerations
 
-- Configured via `CORS_ORIGIN` env var (comma-separated), falls back to `true` (all origins)
-- `credentials: true` enabled for cookie-based auth
+### View Counting Optimization
+**Pattern**: In-memory queue with batch writes
 
-### File Uploads
+**Implementation**: `apps/server/src/routes/files.ts`
+- Collect view counts in memory
+- Batch write to database every 10 seconds
+- Reduces DB write load
 
-- `@fastify/multipart` with configurable `MAX_UPLOAD_SIZE` (default 10MB)
-- Image validation: MIME type + extension whitelist
-- Static file serving: `@fastify/static` for `/uploads/images/`
-- Digital product files stored in `uploads/files/`, served via streaming download endpoint
+### Static File Serving
+**Pattern**: Fastify static plugin serves pre-built frontend
 
-### Logging
+**Production Mode**: Serves `apps/web/dist/` from `apps/server/`
 
-- `@sellsnap/logger` package wraps `consola` with configurable log level
-- Fastify built-in logger also enabled (`logger: true`)
+---
 
-### Database
+## Scalability Patterns
 
-- 3 models: `User`, `Product`, `Purchase`
-- Prices stored in cents (integer)
-- Slugs unique on both User and Product
-- Cascade deletes: User → Products → Purchases
+### Current Architecture
+- Single Fastify server instance
+- PostgreSQL on Docker (local development)
 
-### Email
+### Production Considerations
+- Horizontal scaling: Stateless API allows multiple instances
+- Database: Managed PostgreSQL (RDS, Supabase, etc.)
+- File storage: Move to cloud storage (S3, R2)
+- Session storage: Consider Redis for distributed sessions
 
-- Stub implementation: logs to console in development, throws in production
-- Used for purchase confirmation with download link
+---
 
-### Validation
+## Error Handling Strategy
 
-- `zod` used in checkout route for body validation
-- Most routes use manual field checking (no schema validation framework)
-- Image files validated against MIME type and extension whitelists
+### API Errors
+**Pattern**: Consistent error response format
+
+```typescript
+{
+  success: false,
+  error: "Error message"
+}
+```
+
+### Client Errors
+**Pattern**: Try-catch with user feedback
+
+**Implementation**: `apps/web/src/lib/api.ts`
+
+---
+
+## Abstractions
+
+### Shared Packages
+1. **`packages/db/`**: Prisma client singleton
+2. **`packages/logger/`**: Logging utility (future enhancement)
+
+### Route Organization
+One file per domain:
+- `auth.ts` - Authentication endpoints
+- `products.ts` - Product CRUD
+- `checkout.ts` - Stripe checkout
+- `webhooks.ts` - Webhook handlers
+- `files.ts` - File serving
+
+---
+
+## Deployment Architecture
+
+### Development
+```
+Vite Dev Server (5173) ← → Fastify Server (3000) → PostgreSQL (5432)
+```
+
+### Production (Planned)
+```
+CDN/Static Host ← → Load Balancer → Fastify Instances → Managed PostgreSQL
+                    (Multiple)                             + Redis Cache
+```

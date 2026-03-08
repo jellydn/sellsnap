@@ -1,297 +1,399 @@
-# Testing Patterns
+# TESTING.md - Testing Practices
 
-**Analysis Date:** 2026-03-06
+## Testing Framework Stack
 
-## Test Framework
+### Unit & Integration Tests
+- **Framework**: Vitest
+- **React Testing**: @testing-library/react
+- **Test Runner**: Vitest (integrated with Vite)
+- **Mocking**: Vitest built-in mocking
 
-| Tool | Version | App |
-|---|---|---|
-| Vitest | ^4.0.18 | Both web and server |
-| @testing-library/react | ^16.3.2 | Web only |
-| @testing-library/jest-dom | ^6.9.1 | Web only (vitest matchers) |
-| jsdom | ^28.1.0 | Web only (DOM environment) |
+### E2E Tests
+- **Framework**: Playwright
+- **Browser**: Chromium (default)
+- **Test Files**: 10 E2E test files in `e2e/tests/`
 
-### Configuration
+---
 
-**Web (`apps/web/vitest.config.ts`):**
-- Environment: `jsdom`
-- Globals: `true` (no need to import `describe`, `it`, `expect`, `vi`)
-- Setup file: `./src/test/setup.ts` (imports `@testing-library/jest-dom/vitest`)
-- Path alias: `@/` → `./src/`
-- React plugin via `@vitejs/plugin-react`
+## Test Organization
 
-**Server (`apps/server/vitest.config.ts`):**
-- Environment: default (Node.js)
-- Globals: `true`
-- Mock env vars set inline: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `FRONTEND_URL`, `DATABASE_URL`
-- No setup files
-
-**TypeScript:** `"types": ["vitest/globals"]` in web `tsconfig.json` for global type support.
-
-## Test File Organization
+### Directory Structure
 
 ```
-apps/web/src/
-  components/__tests__/
-    AppLayout.test.tsx
-  pages/__tests__/
-    Dashboard.test.tsx
-    SignIn.test.tsx
-    SignUp.test.tsx
-    ProductPage.test.tsx
-  test/
-    setup.ts          # jest-dom matchers
-    test-utils.tsx     # renderWithRouter, AllProviders
+apps/
+├── web/
+│   └── src/
+│       └── __tests__/           # Web app tests (if any)
+└── server/
+    └── src/
+        ├── routes/
+        │   ├── auth.ts
+        │   └── __tests__/
+        │       └── auth.test.ts  # Route tests
+        └── lib/
+            ├── upload.ts
+            └── __tests__/
+                └── upload.test.ts  # Utility tests
 
-apps/server/src/
-  routes/__tests__/
-    health.test.ts
-    checkout.test.ts
-  lib/__tests__/
-    auth.test.ts
-    email.test.ts
-    upload.test.ts
+e2e/
+└── tests/
+    ├── auth.spec.ts      # Authentication E2E
+    ├── products.spec.ts  # Product browsing E2E
+    ├── checkout.spec.ts  # Purchase flow E2E
+    └── files.spec.ts     # Download flow E2E
 ```
 
-**Convention:** Tests live in `__tests__/` directories alongside their source modules. Test files named `<SourceFile>.test.ts(x)`.
+### Test File Naming
+- Unit/Integration: `*.test.ts` or `*.test.tsx`
+- E2E: `*.spec.ts`
 
-## Test Structure
+---
 
-### Describe/It Pattern
+## Testing Philosophy
 
-All tests use `describe` → `it` blocks with descriptive names:
+### Testing Trophy Approach
+Following Kent C. Dodds' testing philosophy:
+
+```
+    🏆 E2E Tests (Playwright)
+         High confidence, slow, expensive
+      ↑
+   🥉 Integration Tests (Vitest)
+         Good confidence, moderate speed
+      ↑
+  🥈 Unit Tests (Vitest)
+         Low confidence, fast, cheap
+ 🏅 Static Analysis (Biome, TypeScript)
+```
+
+### Priority
+1. **E2E Tests**: Critical user flows (auth, checkout, download)
+2. **Integration Tests**: API endpoints, database operations
+3. **Unit Tests**: Utilities, pure functions
+
+---
+
+## Test Structure (AAA Pattern)
+
+All tests follow **Arrange, Act, Assert**:
 
 ```typescript
-describe("health routes", () => {
-  it("GET /api/health returns ok", async () => { ... });
+test("should create checkout session for product", async () => {
+  // Arrange
+  const product = await createTestProduct();
+  const requestBody = { productId: product.id };
+
+  // Act
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/checkout",
+    payload: requestBody,
+  });
+
+  // Assert
+  expect(response.statusCode).toBe(200);
+  const body = JSON.parse(response.body);
+  expect(body.success).toBe(true);
+  expect(body.data).toHaveProperty("checkoutUrl");
 });
 ```
 
-- Top-level `describe` groups by component/module name
-- `it` descriptions start with a verb or state: "shows", "renders", "returns", "accepts", "rejects"
-- No nested `describe` blocks observed
+---
 
-### Setup/Teardown
+## Vitest Configuration
 
-- `beforeEach` with `vi.clearAllMocks()` used in web tests
-- `vi.restoreAllMocks()` used alongside `clearAllMocks` in `ProductPage.test.tsx`
-- No `afterEach` or `beforeAll`/`afterAll` usage observed
-- Server tests generally don't use lifecycle hooks (each test is self-contained)
-
-## Mocking
-
-### Web (React Components)
-
-**Module mocking with `vi.mock()`:**
+### Setup (`apps/web/vite.config.ts`, `apps/server/vite.config.ts`)
 ```typescript
-vi.mock("../../lib/api", () => ({
-  fetchProducts: vi.fn(),
-  fetchAnalytics: vi.fn(),
-}));
-```
-
-**Auth client mocking pattern:**
-```typescript
-const mockSignInEmail = vi.fn();
-vi.mock("../../lib/auth", () => ({
-  authClient: {
-    signIn: { email: (...args: unknown[]) => mockSignInEmail(...args) },
-    useSession: () => ({ data: null, isPending: false }),
-  },
-}));
-```
-
-**React Router mocking:**
-```typescript
-const mockNavigate = vi.fn();
-vi.mock("react-router-dom", async () => {
-  const actual = await vi.importActual("react-router-dom");
-  return { ...actual, useNavigate: () => mockNavigate };
-});
-```
-
-**Typed mock references:**
-```typescript
-import { fetchProducts } from "../../lib/api";
-const mockFetchProducts = fetchProducts as ReturnType<typeof vi.fn>;
-```
-
-**Global fetch mocking:**
-```typescript
-vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
-  ok: true,
-  json: () => Promise.resolve(mockProduct),
-} as Response);
-```
-
-### Server
-
-**Module mocking with `vi.mock()` + dynamic import:**
-```typescript
-vi.mock("better-auth", () => ({
-  betterAuth: vi.fn(() => ({ api: {} })),
-}));
-const { headersToHeaders } = await import("../auth");
-```
-
-**Node.js built-in mocking:**
-```typescript
-vi.mock("node:fs", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:fs")>();
-  return { ...actual, writeFileSync: vi.fn(), existsSync: vi.fn(() => true) };
-});
-```
-
-**Console spy:**
-```typescript
-const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-```
-
-## Fixtures and Factories
-
-### Inline Mock Data
-
-No factory functions or fixture files. All mock data is defined inline as constants in test files:
-
-```typescript
-const mockProducts = [
-  {
-    id: "1",
-    title: "Test Product",
-    slug: "test-product",
-    price: 999,
-    // ...full object shape
-  },
-];
-```
-
-### Async Generator for Streams
-
-Server tests use ad-hoc async generators for file stream mocking:
-
-```typescript
-async function* mockFileStream(data: string): AsyncGenerator<Buffer> {
-  yield Buffer.from(data);
+test: {
+  globals: true,
+  environment: "jsdom", // For React tests
+  setupFiles: "./src/__tests__/setup.ts",
 }
 ```
 
-### No Shared Factories
+### Running Tests
+```bash
+just test              # Run all tests
+just test-watch        # Watch mode
+cd apps/web && pnpm vitest run <file>     # Specific web test
+cd apps/server && pnpm vitest run <file>  # Specific server test
+```
 
-Each test file defines its own mock data. No shared factory functions or builder patterns exist.
+---
+
+## React Testing Library Patterns
+
+### Component Testing
+```typescript
+import { render, screen, fireEvent } from "@testing-library/react";
+import { Button } from "./Button";
+
+test("should call onClick when clicked", () => {
+  // Arrange
+  const handleClick = vi.fn();
+  render(<Button onClick={handleClick}>Click me</Button>);
+
+  // Act
+  const button = screen.getByRole("button", { name: /click me/i });
+  fireEvent.click(button);
+
+  // Assert
+  expect(handleClick).toHaveBeenCalledTimes(1);
+});
+```
+
+### Best Practices
+- **Test behavior, not implementation**
+- **Use getByRole** for accessibility
+- **Avoid testing internal state**
+- **Mock at network boundary**
+
+---
+
+## API Route Testing
+
+### Fastify Route Tests
+```typescript
+import { buildApp } from "../helper"; // Test helper
+
+test("GET /api/products returns product list", async () => {
+  const app = await buildApp();
+
+  // Create test data
+  await db.product.create({ data: { name: "Test", price: 100 } });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/products",
+  });
+
+  expect(response.statusCode).toBe(200);
+  const body = JSON.parse(response.body);
+  expect(body.data).toHaveLength(1);
+});
+```
+
+### Test Helper Pattern
+Create test helpers for common setup:
+
+```typescript
+// apps/server/src/__tests__/helper.ts
+export async function buildApp() {
+  const app = fastify();
+  await app.register(routes);
+  return app;
+}
+
+export async function createTestUser(overrides = {}) {
+  return db.user.create({
+    data: { email: "test@example.com", ...overrides },
+  });
+}
+```
+
+---
+
+## Mocking Strategy
+
+### External Services
+**Mock at network boundary**:
+- Stripe: Mock `apps/server/src/lib/stripe.ts`
+- Email: Mock email sending (when implemented)
+- File uploads: Mock upload utilities
+
+### Database
+- Use test database or transactions
+- Clean up after each test
+- Or use in-memory SQLite for speed
+
+```typescript
+import { db } from "db";
+
+beforeEach(async () => {
+  // Setup: Create test data
+});
+
+afterEach(async () => {
+  // Cleanup: Delete test data
+  await db.order.deleteMany();
+  await db.product.deleteMany();
+  await db.user.deleteMany();
+});
+```
+
+---
+
+## E2E Testing (Playwright)
+
+### Configuration (`e2e/playwright.config.ts`)
+```typescript
+export default defineConfig({
+  testDir: "./tests",
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  use: {
+    baseURL: "http://localhost:5173",
+    trace: "on-first-retry",
+  },
+});
+```
+
+### E2E Test Example
+```typescript
+import { test, expect } from "@playwright/test";
+
+test("user can purchase a product", async ({ page }) => {
+  // Navigate to product
+  await page.goto("/products/test-product-id");
+
+  // Click buy button
+  await page.click('button:text("Buy Now")');
+
+  // Should redirect to Stripe (mocked in dev)
+  await expect(page).toHaveURL(/stripe/);
+
+  // Complete payment
+  // ... (depends on test setup)
+
+  // Should redirect back with success
+  await expect(page).toHaveURL(/success/);
+});
+```
+
+### Running E2E Tests
+```bash
+just e2e           # Run all E2E tests
+just e2e-ui        # Run with UI
+```
+
+---
 
 ## Coverage
 
-- No coverage configuration in vitest configs
-- No coverage thresholds defined
-- No coverage reporting tools installed
-- Tests run via `vitest run` (no coverage flag by default)
+### Current State
+- **Total Test Files**: ~367 files (unit + E2E combined)
+- **E2E Tests**: 10 test files
 
-## Test Types
+### Coverage Goals
+- Critical paths: Auth, checkout, file download (E2E)
+- Business logic: API routes, utilities (Vitest)
+- Components: Key UI components (Vitest)
 
-### Unit Tests (Server)
-
-- **Route integration tests:** Use `Fastify.inject()` for HTTP-level testing without a running server
-  ```typescript
-  const app = Fastify();
-  await app.register(healthRoutes);
-  const response = await app.inject({ method: "GET", url: "/api/health" });
-  ```
-- **Schema validation tests:** Directly test Zod schemas with `safeParse()`
-- **Utility function tests:** Pure function input/output assertions
-- **Module tests:** Test helper functions with mocked dependencies
-
-### Component Tests (Web)
-
-- All use `renderWithRouter()` from `test-utils.tsx` (wraps in `MemoryRouter`)
-- Query elements using `@testing-library/react` queries:
-  - `screen.getByText()`, `screen.getByRole()`, `screen.getByLabelText()`
-  - `screen.getAllByText()` for multiple matches
-  - `screen.getByTestId()` used once
-- User interactions via `fireEvent.change()` and `fireEvent.click()`
-- Async assertions wrapped in `waitFor(() => { ... })`
-
-### No E2E Tests
-
-No Playwright, Cypress, or other E2E testing framework is present.
-
-## Common Patterns
-
-### Loading → Content → Error
-
-Web tests consistently verify three states:
-
-```typescript
-it("shows loading state initially", () => { ... });
-it("renders content after fetch", async () => { ... });
-it("shows error message on fetch failure", async () => { ... });
+### Generating Coverage
+```bash
+pnpm vitest run --coverage
 ```
 
-### Pending Promise for Loading State
+---
 
-```typescript
-mockFetchProducts.mockReturnValue(new Promise(() => {})); // never resolves
-renderWithRouter(<Dashboard />);
-expect(screen.getByText("Loading products...")).toBeInTheDocument();
+## CI/CD Testing
+
+### GitHub Actions (`.github/workflows/ci.yml`)
+On every push:
+1. **Type Check**: `just typecheck`
+2. **Lint**: `just lint`
+3. **Unit Tests**: `just test`
+4. **E2E Tests**: `just e2e`
+
+### Pre-commit Hooks
+```bash
+prek install  # Install hooks
+prek run --all-files  # Run manually
 ```
 
-### Form Submission Tests
+---
+
+## Test Data Management
+
+### Fixtures
+Create reusable test data factories:
 
 ```typescript
-fireEvent.change(screen.getByLabelText("Email"), { target: { value: "test@example.com" } });
-fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
-await waitFor(() => {
-  expect(mockSignInEmail).toHaveBeenCalledWith({ email: "test@example.com", password: "..." });
+// apps/server/src/__tests__/fixtures.ts
+export const productFixture = {
+  name: "Test Product",
+  price: 1000,
+  description: "A test product",
+  fileUrl: "https://example.com/test.pdf",
+};
+
+export async function createProduct(overrides = {}) {
+  return db.product.create({
+    data: { ...productFixture, ...overrides },
+  });
+}
+```
+
+---
+
+## Async Testing
+
+### Use async/await
+```typescript
+test("async operation", async () => {
+  const result = await asyncFunction();
+  expect(result).toBe(expected);
 });
 ```
 
-### Button Disabled During Loading
-
+### waitFor for UI updates
 ```typescript
-let resolveSignIn: (value: unknown) => void;
-mockSignInEmail.mockImplementationOnce(() => new Promise((resolve) => { resolveSignIn = resolve; }));
-// ...click submit
+import { waitFor } from "@testing-library/react";
+
 await waitFor(() => {
-  expect(screen.getByRole("button", { name: "Signing in..." })).toBeDisabled();
+  expect(screen.getByText("Loaded")).toBeInTheDocument();
 });
-resolveSignIn({});
 ```
 
-### Environment Variable Manipulation (Server)
+---
+
+## Error Testing
+
+### Test Error Paths
+```typescript
+test("should return 404 for non-existent product", async () => {
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/products/non-existent-id",
+  });
+
+  expect(response.statusCode).toBe(404);
+});
+```
+
+---
+
+## Performance Testing
+
+### Test View Counting Optimization
+The view count batching (10s intervals) needs specific testing:
 
 ```typescript
-const originalEnv = process.env.NODE_ENV;
-process.env.NODE_ENV = "development";
-// ...test
-process.env.NODE_ENV = originalEnv;
+vi.useFakeTimers();
+
+// Make multiple requests
+await app.inject({ url: "/api/files/abc/download" });
+await app.inject({ url: "/api/files/abc/download" });
+
+// Fast-forward 10 seconds
+vi.advanceTimersByTime(10000);
+
+// Assert batch was written to DB
+expect(db.product.update).toHaveBeenCalledWith(
+  expect.objectContaining({ viewCount: { increment: 2 } })
+);
 ```
 
-### Render Helper
+---
 
-`renderWithRouter()` in `test-utils.tsx` wraps components in `MemoryRouter` with optional initial route:
+## Best Practices Summary
 
-```typescript
-function renderWithRouter(ui: ReactElement, options?: RenderOptions & { route?: string }): RenderResult
-```
-
-### Navigation Assertions
-
-```typescript
-const link = screen.getByRole("link", { name: "Sign In" });
-expect(link).toHaveAttribute("href", "/sign-in");
-```
-
-### Test Conventions Summary
-
-| Practice | Status |
-|---|---|
-| Globals enabled (`describe`, `it`, `vi`) | ✅ |
-| `beforeEach` with `vi.clearAllMocks()` | ✅ (web) |
-| Inline mock data (no factories) | ✅ |
-| `vi.mock()` for module mocking | ✅ |
-| `waitFor` for async assertions | ✅ |
-| Testing Library queries (role/label/text) | ✅ |
-| `fireEvent` for interactions | ✅ |
-| Fastify `inject()` for route tests | ✅ |
-| Coverage configuration | ❌ |
-| E2E tests | ❌ |
-| Snapshot tests | ❌ |
+1. **Test behavior, not implementation**
+2. **Follow AAA pattern** (Arrange, Act, Assert)
+3. **Use descriptive test names** (`should ... when ...`)
+4. **Mock external dependencies**
+5. **Clean up test data**
+6. **Test critical paths with E2E**
+7. **Keep tests fast** (use in-memory DB when possible)
+8. **Use type-safe test helpers**

@@ -1,303 +1,383 @@
-# Codebase Concerns
+# CONCERNS.md - Technical Debt & Concerns
 
-**Analysis Date:** 2026-03-06
-**Last Updated:** 2026-03-07
-
----
-
-## Tech Debt
-
-### ~~TD-1: Duplicate Layout components~~ ✅ FIXED
-
-- Deleted dead `Layout.tsx` and unused `session.ts`
-
-### TD-2: Inconsistent styling approach
-
-- `ProductCreate.tsx`, `SignIn.tsx`, `SignUp.tsx`, `Dashboard.tsx`, `AppLayout.tsx` use inline `style={}` objects
-- `ProductEdit.tsx`, `ProductPage.tsx`, `PurchaseSuccess.tsx`, `CreatorProfile.tsx`, `Settings.tsx` use Tailwind CSS classes
-- The project declares Tailwind v4 as the standard but half the pages don't use it
-
-### ~~TD-3: Duplicate PrismaClient instantiation~~ ✅ FIXED
-
-- `apps/server/src/lib/prisma.ts` now re-exports from `db` package (shared client)
-- Both packages use `@prisma/client@6.19.2`
-
-### ~~TD-4: `formatPrice` duplicated across 3 files~~ ✅ FIXED
-
-- Extracted to shared `apps/web/src/lib/format.ts`, all pages import from there
-
-### ~~TD-5: No product deletion endpoint~~ ✅ FIXED
-
-- `DELETE /api/products/:id` endpoint exists and cleans up files on disk
-
-### TD-6: better-auth `session`/`account` tables managed outside Prisma schema
-
-- The Prisma schema only defines `User`, `Product`, `Purchase`
-- better-auth auto-creates `session`, `account`, `verification` tables via its adapter at runtime
-- These tables are invisible to Prisma migrations, making schema management fragile
-
-### ~~TD-7: Email sending throws in production~~ ✅ FIXED
-
-- Changed from `throw new Error(...)` to `logger.warn(...)` — webhook no longer crashes
-
-### ~~TD-8: Server listens only on port 3000, not configurable~~ ✅ FIXED
-
-- Port/host now configurable via `PORT` and `HOST` env vars, defaults to `0.0.0.0:3000`
+## Overview
+Documented technical concerns, areas for improvement, and potential issues in the SellSnap codebase.
 
 ---
 
-## Known Bugs
+## Priority Levels
 
-### ~~BUG-1: Email test assertions don't match current implementation~~ ✅ FIXED
-
-- Tests now mock `@sellsnap/logger` and assert against `logger.box()` / `logger.warn()`
-
-### ~~BUG-2: Purchase lookup by session_id is unauthenticated and leaks download tokens~~ ✅ FIXED
-
-- Added auth requirement + email verification to `/api/purchases/by-session/:sessionId`
-
-### ~~BUG-3: View count inflated by bots/crawlers~~ ✅ FIXED
-
-- Added IP-based deduplication (1 minute cooldown) + batched DB writes (10s flush)
-
-### ~~BUG-4: Stripe client may be `undefined` at runtime~~ ✅ FIXED
-
-- Now always exports an initialized `Stripe` instance with fallback key; warns via `logger.warn`
-
-### BUG-5: ~~`FRONTEND_URL` not in `.env.example`~~ NOT A BUG
-
-- `FRONTEND_URL` is present in `.env.example` — this finding was incorrect
-
-### ~~BUG-6: Download link in email points to wrong URL~~ ✅ FIXED
-
-- Download link now uses `API_URL` env var (falling back to `FRONTEND_URL`)
+| Level | Description |
+|-------|-------------|
+| 🔴 **Critical** | Security vulnerabilities, data loss risk |
+| 🟡 **High** | Breaking bugs, performance issues |
+| 🟢 **Medium** | Code quality, maintainability |
+| ⚪ **Low** | Nice-to-have improvements |
 
 ---
 
-## Security Considerations
+## Security Concerns
 
-### ~~SEC-1: No security headers (helmet)~~ ✅ FIXED
+### 🔴 Download Token Security
+**Location**: `apps/server/src/routes/files.ts`
 
-- `@fastify/helmet` is registered in server (with CSP disabled for static files)
+**Issue**: Download tokens (UUID) with 24h expiration may be insufficient for production:
+- No rate limiting on download endpoint
+- Tokens can be shared freely
+- No IP binding or device tracking
 
-### SEC-2: No CSRF protection
+**Recommendation**:
+- Add rate limiting per token
+- Consider shorter expiration (1-2 hours)
+- Add IP binding to tokens
+- Implement download attempt limits
 
-- All state-changing endpoints use cookie-based auth but have no CSRF token validation
-- Product creation, profile updates, publish toggles are all vulnerable
+### 🟡 File Upload Validation
+**Location**: `apps/server/src/lib/upload.ts`
 
-### ~~SEC-3: Hardcoded `BETTER_AUTH_SECRET` in Dockerfile and docker-compose~~ ✅ FIXED
+**Issue**: Basic file type validation may be insufficient:
+- Only checks file extension/MIME type
+- No virus scanning
+- No file content validation (magic bytes)
 
-- `docker-compose.yml` now uses `${BETTER_AUTH_SECRET:?...}` syntax
-- Dockerfile doesn't set any secrets (expects them from environment)
+**Recommendation**:
+- Implement magic byte validation
+- Add virus scanning for uploads
+- Limit total storage per user
+- Consider cloud storage with built-in security
 
-### ~~SEC-4: No password strength requirements~~ ✅ FIXED
+### 🟢 Session Security
+**Location**: `apps/server/src/lib/auth.ts`
 
-- `better-auth` config now has `minPasswordLength: 8`
+**Issue**: Using database sessions; consider:
+- Session fixation protection
+- Concurrent session limits
+- Session rotation on sensitive actions
 
-### ~~SEC-5: SVG uploads allowed — XSS vector~~ ✅ FIXED
-
-- Removed `image/svg+xml` and `.svg` from allowed upload types
-
-### ~~SEC-6: Product file uploads have no type restriction~~ ✅ FIXED
-
-- `saveFile()` now uses `ALLOWED_FILE_EXTENSIONS` allowlist (35+ file types)
-
-### ~~SEC-7: No input sanitization on user-controlled slugs~~ ✅ FIXED
-
-- Added regex validation (`/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/`) and reserved slug blocklist
-
-### ~~SEC-8: `CORS_ORIGIN` defaults to `true` (allow all origins)~~ ✅ FIXED
-
-- Changed to `origin: allowedOrigins || false` (restrictive by default)
-
----
-
-## Performance Bottlenecks
-
-### ~~PERF-1: Analytics query fetches all purchase amounts into memory~~ ✅ FIXED
-
-- Now uses Prisma `groupBy` + `_sum` aggregation instead of loading all purchase rows
-
-### ~~PERF-2: File uploads buffered entirely in memory~~ ✅ FIXED
-
-- Uses `pipeline()` to stream directly to disk (no memory buffering)
-
-### ~~PERF-3: No database indices on frequently queried foreign keys~~ ✅ FIXED
-
-- Added `@@index` on `Product.creatorId`, `Purchase.productId`, `Purchase.customerEmail`, `Purchase.stripeSessionId`
-
-### ~~PERF-4: Slug uniqueness checked with loop + query~~ ✅ FIXED
-
-- Single query to find highest suffix, then increment (instead of loop)
+**Current**: better-auth handles most concerns, but verify configuration.
 
 ---
 
-## Fragile Areas
+## Performance Concerns
 
-### FRAG-1: Multipart parsing with untyped `request.params` casts
+### 🟡 View Count Batching
+**Location**: `apps/server/src/routes/files.ts`
 
-- Every route casts params: `request.params as { slug: string }` — no Fastify schema validation
-- No request body schema validation on product create/update multipart forms
-- Type safety relies entirely on runtime casts
+**Issue**: In-memory view count queue:
+- Lost on server restart
+- Not scalable across multiple instances
+- No persistence mechanism
 
-### ~~FRAG-2: Webhook handler has no idempotency protection~~ ✅ FIXED
+**Current Implementation**:
+```typescript
+// In-memory queue, batched writes every 10s
+const viewQueue = new Map<string, number>();
+```
 
-- Added `stripeSessionId` lookup before creating purchase — duplicate events are skipped with a warning
+**Recommendation**:
+- Move to Redis for distributed counting
+- Or use database with proper batching
+- Add graceful shutdown handling
 
-### ~~FRAG-3: Raw body parsing for all JSON~~ ✅ FIXED
+### 🟢 No Caching Layer
+**Issue**: No caching for frequently accessed data:
+- Product listings hit database on every request
+- User sessions queried repeatedly
+- Static resources not cached aggressively
 
-- Removed global `addContentTypeParser`, now uses `preParsing` hook only for webhook route
+**Recommendation**:
+- Add Redis cache for products
+- Implement HTTP caching headers
+- Consider CDN for static assets
 
-### ~~FRAG-4: `Dockerfile` copies entire `/app` from builder to runner~~ ✅ FIXED
+### 🟢 Database Query Optimization
+**Issue**: No evidence of query optimization:
+- No explicit select statements (Prisma selects all fields)
+- No query complexity analysis
+- Potential N+1 queries in list endpoints
 
-- Simplified to single-stage Dockerfile for reliability
-
----
-
-## Scaling Limits
-
-### SCALE-1: Local filesystem for uploads
-
-- Files stored in `./uploads/` directory on the server filesystem
-- Cannot scale horizontally — each server instance has its own uploads
-- No CDN, no S3/R2 integration
-- Upload directory not mounted as a volume in `docker-compose.yml` — data lost on container recreation
-
-### ~~SCALE-2: Single-process server~~ ✅ FIXED
-
-- Dockerfile now uses compiled JS (`node /app/apps/server/dist/index.js`) not tsx
-
-### ~~SCALE-3: No pagination on list endpoints~~ ✅ FIXED
-
-- Added cursor-based pagination to `GET /api/products` and `GET /api/creators/:slug`
-
-### ~~SCALE-4: View count update on every page view~~ ✅ FIXED
-
-- Views queued in memory, flushed via transaction every 10 seconds
-
----
-
-## Dependencies at Risk
-
-### DEP-1: `zod@^4.0.0` — major version, potentially unstable
-
-- Zod v4 was a significant rewrite; may have breaking changes from ecosystem tooling expecting v3
-- Only used in `checkout.ts` for a single schema
-
-### ~~DEP-2: `better-auth@^1.5.3` — relatively new auth library~~ ✅ FIXED
-
-- Version aligned: both web and server use `^1.5.3`
-
-### ~~DEP-3: `tsx` used in production (`Dockerfile`, `Dockerfile.server`)~~ ✅ FIXED
-
-- Dockerfile now uses `node dist/index.js` (compiled JS)
-
-### ~~DEP-4: `@prisma/client` version mismatch across packages~~ ✅ FIXED
-
-- Both server and db package use `6.19.2`
-
-### DEP-5: `react-router-dom@^7.1.1` — v7 is a major version
-
-- v7 has different APIs from v6 but code uses v6-style `<Routes>`/`<Route>`
-- Works for now but may break on minor updates within v7
+**Recommendation**:
+- Audit Prisma queries with logging
+- Add explicit selects where appropriate
+- Index frequently queried fields
 
 ---
 
-## Missing Critical Features
+## Code Quality Concerns
 
-### ~~MISS-1: No email service integration~~ ✅ FIXED
+### 🟢 Error Handling Consistency
+**Location**: Various route files
 
-- No longer crashes (uses logger.warn instead of throw)
+**Issue**: Inconsistent error responses:
+- Some routes return `{ error: "message" }`
+- Others return `{ success: false, error: "message" }`
+- HTTP status codes vary
 
-### MISS-2: No password reset / forgot password flow
+**Recommendation**:
+- Standardize error response format
+- Create error handler middleware
+- Document error codes
 
-- better-auth supports it but it's not configured
-- No UI for password reset
+### 🟢 Type Safety Gaps
+**Issue**: Some areas with weaker type safety:
+- API request/response types may be incomplete
+- Database query results not always typed
+- Some `any` types may exist
 
-### MISS-3: No email verification
+**Recommendation**:
+- Run `strict` TypeScript audit
+- Add Zod schemas for API validation
+- Improve type coverage
 
-- Users can sign up with any email without verification
-- `emailVerification` not enabled in better-auth config
+### 🟢 Test Coverage
+**Issue**: Limited evidence of unit test coverage:
+- E2E tests exist (10 files)
+- Unit/integration tests not clearly visible
 
-### MISS-4: No Stripe Connect for creator payouts
+**Current**: ~367 test files reported, but coverage unclear
 
-- Platform collects payments but there's no mechanism to pay creators
-- No Stripe Connect, no payout tracking, no revenue split configuration
-
-### MISS-5: No file re-download mechanism after token expiry
-
-- Download tokens expire after 24 hours with no way to regenerate
-- No purchase history page for customers to re-download
-- Customer must contact seller manually
-
-### ~~MISS-6: No 404 / catch-all route in the web app~~ ✅ FIXED
-
-- Added `NotFound` component and `<Route path="*">` catch-all in `App.tsx`
-
-### MISS-7: No logging/monitoring infrastructure
-
-- No structured logging format for production
-- No error tracking (Sentry, etc.)
-- No health check that verifies DB connectivity
-- Health endpoint returns `{ status: "ok" }` without checking dependencies
-
----
-
-## Test Coverage Gaps
-
-### ~~TEST-1: No route integration tests for core business logic~~ ✅ PARTIALLY FIXED
-
-- Added tests for: health, upload, email, auth, profile, webhooks, analytics
-- Still missing: products CRUD, purchases, checkout
-
-### TEST-2: Checkout test only validates Zod schema, not the route
-
-- `checkout.test.ts` re-declares the schema and tests parsing
-- Does not test the actual route handler, Stripe integration, or error paths
-
-### TEST-3: No tests for auth middleware/session validation
-
-- No test verifies that unauthenticated requests to protected routes return 401
-- No test for authorization (user A can't edit user B's product)
-
-### TEST-4: No web tests for key pages
-
-- `ProductCreate.tsx` — **0 tests** (form submission, validation, file upload)
-- `ProductEdit.tsx` — **0 tests** (load, save, publish toggle, file replace)
-- `Settings.tsx` — **0 tests** (profile update, avatar upload)
-- `PurchaseSuccess.tsx` — **0 tests**
-- `CreatorProfile.tsx` — **0 tests**
-- `ProtectedRoute.tsx` — **0 tests** (redirect behavior)
-
-### ~~TEST-5: Email test is broken~~ ✅ FIXED
-
-- Tests now correctly mock `@sellsnap/logger` and pass
-
-### TEST-6: No end-to-end tests
-
-- No Playwright, Cypress, or similar E2E testing
-- No test covers the full purchase flow (browse → checkout → webhook → download)
+**Recommendation**:
+- Run coverage report
+- Identify untested critical paths
+- Add unit tests for business logic
 
 ---
 
-## Summary
+## Architecture Concerns
 
-**Fixed (31 items):** TD-1, TD-3, TD-4, TD-5, TD-7, TD-8, BUG-1, BUG-2, BUG-3, BUG-4, BUG-6, SEC-1, SEC-3, SEC-4, SEC-5, SEC-6, SEC-7, SEC-8, PERF-1, PERF-2, PERF-3, PERF-4, FRAG-2, FRAG-3, FRAG-4, SCALE-2, SCALE-3, SCALE-4, DEP-2, DEP-3, DEP-4
+### 🟡 File Storage Scalability
+**Location**: `apps/server/public/uploads/`
 
-**Partially fixed (2 items):** MISS-1 (no longer crashes but no real email provider), TEST-1 (profile/webhooks/analytics tests added, products/purchases still missing)
+**Issue**: Local file storage not production-ready:
+- Doesn't scale across instances
+- No backup strategy
+- No CDN integration
+- Limited disk space
 
-**Invalid (1 item):** BUG-5 (was already present in `.env.example`)
+**Recommendation**:
+- Migrate to cloud storage (S3, R2, Backblaze)
+- Implement CDN for downloads
+- Add backup/redundancy strategy
 
-**Not fixed — MISS-6 was already fixed:** MISS-6
+### 🟢 Email Not Implemented
+**Location**: `apps/server/src/lib/email.ts` (placeholder)
 
-**Remaining (13 items):**
+**Issue**: Email functionality referenced but not implemented:
+- Password reset flows
+- Purchase confirmations
+- Download notifications
 
-- Tech Debt: TD-2 (inline styles → Tailwind), TD-6 (better-auth tables outside Prisma)
-- Security: SEC-2 (no CSRF protection)
-- Fragile: FRAG-1 (untyped request.params casts)
-- Scaling: SCALE-1 (local filesystem uploads)
-- Dependencies: DEP-1 (zod v4), DEP-5 (react-router-dom v7)
-- Missing Features: MISS-2 (password reset), MISS-3 (email verification), MISS-4 (Stripe Connect), MISS-5 (file re-download), MISS-7 (monitoring)
-- Test Gaps: TEST-2 (checkout route test), TEST-3 (auth middleware tests), TEST-4 (web page tests), TEST-6 (E2E tests)
+**Status**: Placeholder exists, implementation needed
 
-_Concerns audit: 2026-03-07_
+**Recommendation**:
+- Choose email provider (SendGrid, Resend, AWS SES)
+- Implement email templates
+- Add queue for reliable delivery
+
+### 🟢 No Background Job System
+**Issue**: No async job processing:
+- Email sending (when implemented) will block requests
+- No job queue for heavy tasks
+- No retry mechanism for failures
+
+**Recommendation**:
+- Add job queue (BullMQ, Faktory)
+- Move heavy tasks to background
+- Implement retry logic
+
+---
+
+## Missing Features
+
+### 🟢 User Management
+**Observations**:
+- No user profile editing
+- No password reset flow (UI)
+- No email verification
+- No account deletion
+
+### 🟢 Admin Features
+**Observations**:
+- No admin dashboard
+- No sales reporting
+- No user management interface
+- No product moderation
+
+### 🟢 Analytics
+**Observations**:
+- No usage analytics
+- No sales metrics
+- No user behavior tracking
+
+---
+
+## Configuration Concerns
+
+### 🟢 Environment Variable Validation
+**Issue**: No validation that required env vars are set:
+- App may start with missing configuration
+- Runtime errors when accessing undefined env vars
+- No clear error messages for misconfiguration
+
+**Recommendation**:
+- Add env var validation on startup
+- Use Zod for env schema validation
+- Provide helpful error messages
+
+### 🟢 Hardcoded Values
+**Issue**: Some values may be hardcoded:
+- Rate limit values
+- File size limits
+- Token expiration times
+
+**Recommendation**:
+- Move to environment variables
+- Document configuration options
+- Add validation
+
+---
+
+## Deployment Concerns
+
+### 🟢 Production Readiness
+**Observations**:
+- No evidence of production deployment config
+- No database migration strategy documented
+- No health check endpoints
+- No logging/metrics setup
+
+**Recommendation**:
+- Add `/health` endpoint
+- Implement structured logging
+- Add metrics collection
+- Document deployment process
+
+### 🟢 Docker Configuration
+**Issue**: Only `docker-compose.yml` for local PostgreSQL:
+- No containerized app deployment
+- No production Docker setup
+
+**Recommendation**:
+- Add Dockerfile for apps
+- Create production compose file
+- Document container deployment
+
+---
+
+## Documentation Concerns
+
+### 🟢 API Documentation
+**Issue**: No API documentation:
+- No OpenAPI/Swagger spec
+- No request/response examples
+- No authentication documentation
+
+**Recommendation**:
+- Add OpenAPI spec
+- Generate API docs
+- Document authentication flow
+
+### 🟢 Developer Guide
+**Issue**: Limited onboarding documentation:
+- No architecture decision records (ADRs)
+- No contribution guidelines
+- Limited code comments
+
+**Recommendation**:
+- Add ADRs for major decisions
+- Create contributing guide
+- Document complex logic
+
+---
+
+## Dependency Concerns
+
+### 🟢 Dependency Updates
+**Issue**: No automated dependency updates:
+- Security vulnerabilities may go unnoticed
+- Missing out on bug fixes
+- Potential compatibility issues
+
+**Recommendation**:
+- Add Dependabot or Renovate
+- Regular security audits
+- Document upgrade process
+
+---
+
+## Monitoring & Observability
+
+### 🟢 No Logging Strategy
+**Issue**: Minimal logging implementation:
+- `packages/logger/` is minimal
+- No structured logging
+- No log levels configured
+
+**Recommendation**:
+- Implement structured logging (Pino, Winston)
+- Add request logging middleware
+- Set up log aggregation
+
+### 🟢 No Error Tracking
+**Issue**: No error tracking system:
+- Production errors may go unnoticed
+- No stack trace collection
+- No alerting
+
+**Recommendation**:
+- Add Sentry or similar
+- Implement error reporting
+- Set up alerting
+
+---
+
+## Testing Gaps
+
+### 🟢 Missing Test Scenarios
+**Observations**:
+- No evidence of load testing
+- No security testing
+- Limited edge case coverage
+
+**Recommendation**:
+- Add load testing (k6)
+- Implement security test suite
+- Increase edge case coverage
+
+---
+
+## Summary Statistics
+
+| Category | Count |
+|----------|-------|
+| 🔴 Critical | 3 |
+| 🟡 High | 5 |
+| 🟢 Medium | 20+ |
+| ⚪ Low | Not counted |
+
+---
+
+## Recommended Next Steps
+
+1. **Immediate** (This Sprint):
+   - Add download token rate limiting
+   - Implement file upload validation
+   - Add env var validation
+
+2. **Short-term** (This Month):
+   - Migrate to cloud storage
+   - Implement email system
+   - Add comprehensive tests
+
+3. **Long-term** (This Quarter):
+   - Add caching layer
+   - Implement background jobs
+   - Set up monitoring/alerting
+
+---
+
+## Notes
+
+- This document should be updated as concerns are addressed
+- Prioritize based on actual user impact
+- Re-evaluate after production deployment

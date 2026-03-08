@@ -1,201 +1,223 @@
-# External Integrations
+# INTEGRATIONS.md - External Integrations
 
-**Analysis Date:** 2026-03-06
+## Overview
+SellSnap integrates with several external services for authentication, payments, file handling, and infrastructure.
 
-## APIs & External Services
+---
 
-### Stripe (Payment Processing)
+## Payment Processing
 
-| Aspect           | Detail                                          |
-| ---------------- | ------------------------------------------------ |
-| SDK              | `stripe` ^20.4.0                                 |
-| Init             | `apps/server/src/lib/stripe.ts` — lazy init with `STRIPE_SECRET_KEY` |
-| Checkout         | `POST /api/checkout/:productSlug` → `stripe.checkout.sessions.create()` |
-| Payment mode     | One-time (`mode: "payment"`)                     |
-| Payment methods  | Card only (`payment_method_types: ["card"]`)     |
-| Currency         | USD                                              |
-| Metadata         | `productId` attached to checkout session         |
-| Webhooks         | `POST /api/webhooks/stripe` — signature verified via `STRIPE_WEBHOOK_SECRET` |
-| Events handled   | `checkout.session.completed`                     |
+### Stripe
+**Purpose**: Handle checkout sessions and payment webhooks
 
-**Checkout flow:**
-1. Frontend calls `POST /api/checkout/:productSlug` with optional `customerEmail`
-2. Server creates Stripe Checkout Session with product details
-3. Returns `{ url }` — frontend redirects to Stripe hosted checkout
-4. Stripe sends webhook on completion → server creates `Purchase` record
-5. Download link emailed to customer (24h expiry)
+**Configuration**:
+```bash
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
 
-### Email (Stub)
+**Integration Points**:
+- `apps/server/src/lib/stripe.ts` - Stripe client initialization
+- `apps/server/src/routes/checkout.ts` - Checkout session creation
+- `apps/server/src/routes/webhooks.ts` - Stripe webhook handler
 
-| Aspect   | Detail                                                  |
-| -------- | ------------------------------------------------------- |
-| Location | `apps/server/src/lib/email.ts`                          |
-| Dev mode | Logs email to console via `logger.box()`                |
-| Prod     | **Not implemented** — throws error                      |
-| Usage    | Post-purchase confirmation with download link           |
+**Features**:
+- Checkout sessions for product purchases
+- Webhook signature verification
+- Order fulfillment on successful payment
 
-> No external email provider is integrated yet. Production email sending must be implemented.
+**Environment**: Test mode (`sk_test_`) for development
 
-## Data Storage
+---
 
-### PostgreSQL
-
-| Aspect     | Detail                                          |
-| ---------- | ------------------------------------------------ |
-| Version    | 16-alpine (Docker)                               |
-| ORM        | Prisma ^6.19.2                                   |
-| Schema     | `packages/db/prisma/schema.prisma`               |
-| Connection | `DATABASE_URL` env var                           |
-| Client     | Singleton in `apps/server/src/lib/prisma.ts`     |
-
-**Schema models:**
-
-| Model      | Key Fields                                                    |
-| ---------- | ------------------------------------------------------------- |
-| `User`     | id (cuid), name, email (unique), slug (unique), avatarUrl     |
-| `Product`  | id, title, slug (unique), description, price (int/cents), coverImageUrl, filePath, published, viewCount, creatorId → User |
-| `Purchase` | id, productId → Product, customerEmail, stripePaymentIntentId, stripeSessionId, amount, status, downloadToken (unique), downloadExpiresAt |
-
-> Note: better-auth creates additional tables (session, account, verification) not shown in the user-managed schema.
-
-### File Storage (Local Filesystem)
-
-| Aspect     | Detail                                          |
-| ---------- | ------------------------------------------------ |
-| Location   | `apps/server/src/lib/upload.ts`                  |
-| Images dir | `{cwd}/uploads/images/` — served via `@fastify/static` at `/uploads/images/` |
-| Files dir  | `{cwd}/uploads/files/` — stored but not publicly served |
-| Naming     | UUID-based filenames to prevent collisions        |
-| Validation | Image MIME types: jpeg, png, gif, webp, svg+xml  |
-| Size limit | Configurable via `MAX_UPLOAD_SIZE` env (default 10MB) |
-
-## Authentication & Identity
+## Authentication
 
 ### better-auth
+**Purpose**: User authentication and session management
 
-| Aspect      | Detail                                           |
-| ----------- | ------------------------------------------------ |
-| Library     | `better-auth` ^1.5.3                             |
-| Server init | `apps/server/src/lib/auth.ts` — `betterAuth()` with Prisma adapter |
-| Client init | `apps/web/src/lib/auth.ts` — `createAuthClient()` from `better-auth/react` |
-| DB adapter  | `prismaAdapter` with PostgreSQL provider          |
-| Auth method | Email + password (`emailAndPassword: { enabled: true }`) |
-| Routes      | `GET/POST /api/auth/*` — Fastify delegates to `auth.handler()` |
-| Session     | `authClient.useSession()` React hook via `apps/web/src/lib/session.ts` |
-| Base URL    | `FRONTEND_URL` env var (default `http://localhost:5173`) |
+**Configuration**:
+```bash
+BETTER_AUTH_SECRET=...
+BETTER_AUTH_URL=...
+```
 
-**Auth flow:**
-1. Client uses `better-auth/react` hooks for sign-up/sign-in
-2. Server route `/api/auth/*` passes raw Request to `auth.handler()`
-3. better-auth manages sessions via cookies and Prisma-backed storage
-4. `ProtectedRoute` component gates authenticated pages (Dashboard, Settings, etc.)
+**Integration Points**:
+- `apps/server/src/lib/auth.ts` - Auth configuration
+- `apps/server/src/routes/auth.ts` - Auth endpoints
+- `apps/web/src/lib/auth.ts` - Auth client utilities
 
-## Monitoring & Observability
+**Features**:
+- Email/password authentication
+- Server-side session management
+- Prisma adapter for database sessions
+- Protected routes middleware
 
-### Logging
+**Flow**:
+1. User registers/logs in via `/api/auth/*` endpoints
+2. better-auth creates session in database
+3. Session token stored in HTTP-only cookie
+4. Subsequent requests validated via middleware
 
-| Layer   | Tool                                     |
-| ------- | ---------------------------------------- |
-| Server  | Fastify built-in logger (`logger: true`) |
-| App     | `@sellsnap/logger` (consola wrapper)     |
+---
 
-- **consola** configured with log levels: verbose (4) in dev, info (3) in production
-- Configurable via `LOG_LEVEL` env var
-- `createLogger(prefix)` factory for tagged loggers
+## Database
 
-### Rate Limiting
+### PostgreSQL (via Docker)
+**Purpose**: Persistent data storage
 
-| Scope  | Config                                |
-| ------ | ------------------------------------- |
-| Global | 100 requests/minute via `@fastify/rate-limit` |
-| Checkout | 20 requests/minute (per-route override) |
+**Configuration**:
+```bash
+DATABASE_URL=postgresql://sellsnap:sellsnap@localhost:5432/sellsnap
+```
 
-### Health Check
+**Local Setup**:
+```bash
+docker-compose up -d  # Start PostgreSQL
+```
 
-- `GET /api/health` route registered via `apps/server/src/routes/health.ts`
+**Connection Details**:
+- Host: localhost
+- Port: 5432
+- User: sellsnap
+- Password: sellsnap
+- Database: sellsnap
 
-## CI/CD & Deployment
+**ORM**: Prisma 6
+- Schema: `apps/server/prisma/schema.prisma`
+- Migrations: `apps/server/prisma/migrations/`
+- Shared client: `packages/db/src/index.ts`
 
-### Pre-commit Hooks
+---
 
-- **prek** (bun-based) runs Biome check on `.ts/.tsx/.js/.jsx` files
-- Config: `.pre-commit-config.yaml` → `biome check --write` on both `apps/web` and `apps/server`
+## File Storage
 
-### Docker Deployment
+### Local File System
+**Purpose**: Store uploaded files and product assets
 
-| Image              | Dockerfile          | Ports | Description                        |
-| ------------------ | ------------------- | ----- | ---------------------------------- |
-| Combined (web+api) | `Dockerfile`        | 80    | `serve` for static + `tsx` for API via `concurrently` |
-| Server-only        | `Dockerfile.server` | 3000  | API server with non-root user, uploads dirs |
+**Integration Points**:
+- `apps/server/src/lib/upload.ts` - File upload handling
+- `apps/server/src/routes/files.ts` - File serving endpoints
+- `apps/server/public/uploads/` - Upload directory
 
-### Docker Compose
+**Features**:
+- Multipart file upload via `@fastify/multipart`
+- File validation (type, size limits)
+- Download tokens (UUID, 24h expiration)
+- View counting with in-memory batching
 
-- **Services:** `web` (combined app) + `db` (PostgreSQL 16-alpine)
-- **Networking:** bridge network `sellsnap`
-- **Health checks:** `pg_isready` on PostgreSQL
-- **Volumes:** `postgres_data` for database persistence
+**Storage Path**: `apps/server/public/uploads/`
 
-### Task Runner
+---
 
-- **just** (justfile) — shortcuts for install, dev, typecheck, build, lint, test, Prisma commands
+## Infrastructure
+
+### GitHub Actions
+**Purpose**: CI/CD automation
+
+**Workflow**: `.github/workflows/ci.yml`
+
+**Checks on Push**:
+- Type checking (all packages)
+- Linting (Biome)
+- Unit tests (Vitest)
+- E2E tests (Playwright)
+
+**Triggers**: Push to any branch, Pull requests
+
+---
 
 ## Environment Configuration
 
-### Root `.env.example`
+### Required Environment Variables
 
-| Variable               | Purpose                         | Default                        |
-| ---------------------- | ------------------------------- | ------------------------------ |
-| `DATABASE_URL`         | PostgreSQL connection string    | `postgresql://sellsnap:sellsnap@db:5432/sellsnap` |
-| `STRIPE_SECRET_KEY`    | Stripe API secret key           | —                              |
-| `STRIPE_WEBHOOK_SECRET`| Stripe webhook signing secret   | —                              |
-| `FRONTEND_URL`         | Frontend base URL               | `http://localhost`             |
-| `POSTGRES_USER`        | Docker PostgreSQL user          | `sellsnap`                     |
-| `POSTGRES_PASSWORD`    | Docker PostgreSQL password      | `sellsnap`                     |
-| `POSTGRES_DB`          | Docker PostgreSQL database name | `sellsnap`                     |
+```bash
+# Database
+DATABASE_URL=postgresql://...
 
-### Server `.env.example` (`apps/server/.env.example`)
+# Authentication
+BETTER_AUTH_SECRET=...
+BETTER_AUTH_URL=...
 
-| Variable               | Purpose                         | Default                        |
-| ---------------------- | ------------------------------- | ------------------------------ |
-| `DATABASE_URL`         | PostgreSQL connection string    | —                              |
-| `BETTER_AUTH_SECRET`   | Auth session signing secret     | —                              |
-| `STRIPE_SECRET_KEY`    | Stripe API secret key           | —                              |
-| `STRIPE_WEBHOOK_SECRET`| Stripe webhook signing secret   | —                              |
-| `FRONTEND_URL`         | Frontend base URL               | `http://localhost:5173`        |
-| `MAX_UPLOAD_SIZE`      | Max file upload bytes           | `10485760` (10MB)              |
+# Stripe
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
 
-### Build-time Variables
+# Application URLs
+FRONTEND_URL=http://localhost:5173
+CORS_ORIGIN=http://localhost:5173
+API_URL=http://localhost:3000
 
-| Variable       | Usage                           |
-| -------------- | ------------------------------- |
-| `VITE_API_URL` | API base URL injected at build time (Docker ARG → Vite `import.meta.env`) |
+# Optional
+LOG_LEVEL=info
+```
 
-### Runtime Variables (additional)
+**Setup**: Copy from `.env.example`
 
-| Variable       | Usage                           |
-| -------------- | ------------------------------- |
-| `CORS_ORIGIN`  | Comma-separated allowed origins (defaults to allow all) |
-| `LOG_LEVEL`    | Numeric log level for consola   |
-| `NODE_ENV`     | `production` / `development`    |
+---
 
-## Webhooks & Callbacks
+## CORS Configuration
 
-### Incoming Webhooks
+**Allowed Origins**:
+- Development: `http://localhost:5173` (Vite dev server)
+- Configured via `CORS_ORIGIN` env var
 
-| Endpoint                  | Source | Events                        | Verification                |
-| ------------------------- | ------ | ----------------------------- | --------------------------- |
-| `POST /api/webhooks/stripe` | Stripe | `checkout.session.completed` | `stripe.webhooks.constructEvent()` with `STRIPE_WEBHOOK_SECRET` |
+**Implementation**: `@fastify/cors` middleware in `apps/server/src/index.ts`
 
-**Webhook processing (`checkout.session.completed`):**
-1. Verify signature using Stripe SDK
-2. Extract `productId` from session metadata and `customerEmail`
-3. Look up product in database
-4. Create `Purchase` record with download token (UUID, 24h expiry)
-5. Send confirmation email with download link
+---
 
-### Outbound Redirects
+## Security Middleware
 
-| Trigger           | URL Pattern                                          |
-| ----------------- | ---------------------------------------------------- |
-| Checkout success  | `{FRONTEND_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}` |
-| Checkout cancel   | `{FRONTEND_URL}/p/{product.slug}`                    |
+### Implemented via Fastify plugins:
+- **@fastify/helmet**: Security headers
+- **@fastify/rate-limit**: Rate limiting (100 req/min production, 1000 req/min test)
+- **@fastify/cors**: CORS protection
+
+---
+
+## Email Services
+
+### Planned/Placeholder
+**Note**: Email functionality is referenced but not fully implemented in current codebase. Areas marked for future email integration:
+- Password reset flows
+- Purchase confirmations
+- Download notifications
+
+---
+
+## Future Integrations (Potential)
+
+Based on codebase analysis, these services may be added:
+- Email provider (SendGrid, Resend, AWS SES)
+- File storage service (AWS S3, Cloudflare R2) for production
+- Analytics/monitoring service
+- Production payment processing (Stripe live mode)
+
+---
+
+## Webhook Handlers
+
+### Stripe Webhooks
+**Endpoint**: `POST /api/webhooks`
+
+**Events Handled**:
+- `checkout.session.completed` - Order fulfillment
+
+**Verification**: Stripe signature verification using `STRIPE_WEBHOOK_SECRET`
+
+---
+
+## API Client Integration
+
+### Frontend → Backend
+**Base URL**: Configured via `API_URL` env var (default: `http://localhost:3000`)
+
+**Implementation**: `apps/web/src/lib/api.ts`
+
+**Pattern**:
+```typescript
+const api = {
+  get: (url) => fetch(`${API_URL}${url}`, ...),
+  post: (url, data) => fetch(`${API_URL}${url}`, ...),
+  // ...
+}
+```

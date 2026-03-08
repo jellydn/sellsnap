@@ -1,169 +1,431 @@
-# Coding Conventions
+# CONVENTIONS.md - Code Conventions
 
-**Analysis Date:** 2026-03-06
+## Overview
+SellSnap follows strict TypeScript conventions with emphasis on type safety, readability, and consistency across the monorepo.
 
-## Naming Patterns
+---
 
-| Category | Convention | Examples |
-|---|---|---|
-| Files (components/pages) | PascalCase `.tsx` | `AppLayout.tsx`, `Dashboard.tsx`, `ProtectedRoute.tsx` |
-| Files (utilities/lib) | kebab-case `.ts` | `auth.ts`, `upload.ts`, `test-utils.tsx` |
-| Files (routes) | kebab-case `.ts` | `health.ts`, `checkout.ts`, `webhooks.ts` |
-| React components | PascalCase `function` declarations | `function Dashboard()`, `function AppLayout()` |
-| Variables/functions | camelCase | `handleSignOut`, `fetchProducts`, `formatPrice` |
-| Constants | camelCase or SCREAMING_SNAKE_CASE | `IMAGES_DIR`, `FILES_DIR`, `ALLOWED_IMAGE_MIME_TYPES` |
-| Interfaces | PascalCase | `Product`, `CreateProductData`, `AnalyticsData` |
-| Route plugins | camelCase with `Routes` suffix | `healthRoutes`, `productRoutes`, `checkoutRoutes` |
-| Test files | `<SourceFile>.test.ts(x)` in `__tests__/` | `health.test.ts`, `Dashboard.test.tsx` |
+## TypeScript Conventions
+
+### Type Safety
+- **Strict Mode**: Enabled for all packages
+- **No `any`**: Unless absolutely necessary
+- **Explicit Types**: Exported functions have explicit return types
+- **Type vs Interface**:
+  - Use `type` for unions and intersections
+  - Use `interface` for object shapes
+
+```typescript
+// ✅ Good
+type Result<T> = { success: true; data: T } | { success: false; error: string };
+
+interface User {
+  id: string;
+  email: string;
+}
+
+// ❌ Avoid
+function processData(data: any): any { ... }
+```
+
+### Type Imports
+Use `import type` for type-only imports:
+
+```typescript
+import type { User, Product } from "@/types";
+import { useState } from "react"; // Value import
+```
+
+---
+
+## Import Order Convention
+
+**Order**: External → Internal → Relative → Type imports
+
+```typescript
+// 1. External dependencies
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+
+// 2. Internal modules (with @ alias)
+import { formatPrice } from "@/lib/format";
+import { type User } from "@/types/user";
+
+// 3. Relative imports
+import { Footer } from "./Footer";
+import { type LocalType } from "./types";
+```
+
+---
+
+## Naming Conventions
+
+| Category | Convention | Example |
+|----------|-----------|---------|
+| Files (utils) | camelCase | `format.ts`, `api.ts` |
+| Files (components) | PascalCase | `AppLayout.tsx`, `Button.tsx` |
+| Files (test) | *.test.ts | `auth.test.ts` |
+| Folders | kebab-case | `__tests__/`, `e2e/` |
+| Variables | camelCase | `userName`, `productId` |
+| Functions | camelCase | `formatPrice()`, `createUser()` |
+| Components | PascalCase | `function AppLayout()` |
+| Constants | SCREAMING_SNAKE_CASE | `MAX_UPLOAD_SIZE` |
+| Types | PascalCase | `type User`, `interface Product` |
+| Enums | PascalCase | `enum UserRole` |
+| Database tables | PascalCase | `User`, `Product`, `Order` |
+| Database fields | camelCase | `createdAt`, `stripePriceId` |
+
+---
 
 ## Code Style
 
-### Formatter (Biome 2.4.5)
+### Functions
+- Prefer `function` declarations for components
+- Use arrow functions for callbacks and short utilities
+- Extract complex logic into named functions
 
-Both `apps/web` and `apps/server` share the same Biome config:
+```typescript
+// ✅ Component declaration
+export function AppLayout({ children }: { children: React.ReactNode }) {
+  return <div>{children}</div>;
+}
 
-- **Indent:** 2 spaces
-- **Line width:** 100 characters
-- **Linter:** Recommended rules enabled, `noExplicitAny: off`
-- **CSS linting:** Disabled (web only)
+// ✅ Utility arrow function
+export const formatPrice = (price: number): string => {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(price);
+};
+```
 
-### TypeScript
+### Guard Clauses
+Move preconditions to the top and return early:
 
-- **Strict mode:** Enabled via shared `packages/tsconfig/base.json`
-- **Target:** ES2022
-- **Module:** ESNext with `bundler` module resolution
-- **Composite projects** with `outDir`/`rootDir` in each app
-- `type` keyword used for type-only imports: `import type { FastifyInstance } from "fastify"`
-- `interface` used for object shapes (e.g., `interface Product`, `interface AnalyticsData`)
-- Params often cast inline: `request.params as { slug: string }` (no Fastify schema types)
-- Server uses Zod for runtime validation (e.g., `checkoutBodySchema`)
+```typescript
+// ✅ Guard clauses
+function processUser(user?: User) {
+  if (!user) return;
+  if (!user.isActive) return;
+  if (!user.hasPermission) return;
 
-### React
+  // Main logic
+}
 
-- Functional components with `function` declarations (not arrow functions)
-- Named exports preferred: `export function Dashboard()`
-- One exception: `App.tsx` uses `export default function App()`
-- Inline styles via `style` prop objects (not Tailwind classes, despite Tailwind being installed)
-- State managed with `useState`/`useEffect` hooks — no external state library
-- Props destructured inline: `{ children }: { children: React.ReactNode }`
-
-### Pre-commit
-
-- Biome check runs on `.(ts|tsx|js|jsx)$` files via `.pre-commit-config.yaml`
-- Uses `bun x biome check --write .` in both web and server directories
-
-## Import Organization
-
-Consistent ordering across the codebase:
-
-1. **Node built-ins:** `import { randomUUID } from "node:crypto"` (uses `node:` prefix)
-2. **External packages:** `import Fastify from "fastify"`, `import { z } from "zod"`
-3. **Workspace packages:** `import { logger } from "@sellsnap/logger"`
-4. **Internal absolute (web):** `import { Button } from "@/components/ui/button"` (via `@/` alias)
-5. **Relative imports:** `import { prisma } from "../lib/prisma"`
-6. **Type-only imports:** `import type { FastifyInstance } from "fastify"` (separate or inline)
-
-Web app uses `@/` path alias mapped to `./src/*` in `tsconfig.json` and `vite.config.ts`.
-
-## Error Handling
-
-### Server (Fastify)
-
-- Early-return pattern with HTTP status codes:
-  ```typescript
-  if (!session?.user) {
-    return reply.status(401).send({ error: "Unauthorized" });
+// ❌ Nested conditions
+function processUser(user?: User) {
+  if (user) {
+    if (user.isActive) {
+      if (user.hasPermission) {
+        // Main logic
+      }
+    }
   }
-  ```
-- Consistent error response shape: `{ error: string }`, sometimes with `{ error: string, code: string }`
-- `try/catch` for external operations (Stripe webhooks, auth handler)
-- Prisma errors checked via `error.code === "P2002"` for unique constraint violations
-- Validation errors return 400, auth errors return 401/403, not-found returns 404
-
-### Client (React)
-
-- `try/catch` in form handlers with error state:
-  ```typescript
-  try { ... } catch (err) {
-    setError(err instanceof Error ? err.message : "Sign in failed");
-  } finally { setLoading(false); }
-  ```
-- API functions throw `new Error()` on non-ok responses, parsing the error from JSON
-- Error messages displayed in colored `<div>` blocks with red background
-- Loading state tracked via `useState<boolean>` with disabled buttons
-
-## Logging
-
-- **Server:** Uses `@sellsnap/logger` package wrapping `consola` (level-based logging)
-  - `logger.success()` for success events
-  - `logger.error()` for error conditions
-  - `logger.box()` for formatted output (email preview)
-  - Fastify's built-in `server.log.error()` also used in auth routes
-  - `console.warn()` used as fallback in `stripe.ts` initialization
-- **Log level:** Configurable via `LOG_LEVEL` env var; production defaults to 3, dev to 4
-- **Client:** No structured logging — uses console only in tests
-
-## Comments
-
-- **Minimal comments** throughout the codebase
-- Only present for non-obvious behavior: `// Ignore parsing errors, customerEmail is optional`
-- No JSDoc or TSDoc annotations on functions
-- No file-level header comments
-- No TODO/FIXME comments observed
-
-## Function Design
-
-### Server Route Handlers
-
-- Route plugins follow Fastify plugin pattern: `async function xyzRoutes(server: FastifyInstance): Promise<void>`
-- Each route file exports a single plugin function registering one or more routes
-- Route handlers are async, return values directly (Fastify auto-serializes to JSON)
-- Authentication checked at the top of each handler (repeated pattern, no middleware)
-- Request params cast inline rather than using Fastify schema validation
-
-### Client API Functions
-
-- Standalone async functions in `lib/api.ts` (not classes)
-- Each function handles its own fetch, error checking, and JSON parsing
-- Pattern: check `response.ok`, parse error body with `.catch()` fallback, throw `Error`
-- Return typed results directly
-
-### Utility Functions
-
-- Pure functions exported individually: `validateImageFile()`, `headersToHeaders()`, `formatPrice()`
-- Return `null` for success / `string` for error in validation functions
-
-## Module Design
-
-### Monorepo Structure
-
-```
-apps/web/          → React SPA (Vite, React Router, better-auth client)
-apps/server/       → Fastify API (better-auth server, Prisma, Stripe)
-packages/db/       → Prisma schema & client
-packages/logger/   → Shared logger (consola wrapper)
-packages/tsconfig/ → Shared TypeScript base config
+}
 ```
 
-### Server Module Organization
+### Error Handling
+- Use try/catch with async/await
+- Return typed error results
 
-- `src/index.ts` — App bootstrap, plugin registration, server startup
-- `src/routes/` — One file per resource domain (products, auth, checkout, etc.)
-- `src/lib/` — Shared utilities (prisma, auth, stripe, upload, email)
-- Each lib module exports singleton instances or utility functions
+```typescript
+type Result<T> = { success: true; data: T } | { success: false; error: string };
 
-### Web Module Organization
+async function getUser(id: string): Promise<Result<User>> {
+  try {
+    const user = await db.user.findUnique({ where: { id } });
+    if (!user) return { success: false, error: "User not found" };
+    return { success: true, data: user };
+  } catch (error) {
+    return { success: false, error: "Failed to fetch user" };
+  }
+}
+```
 
-- `src/main.tsx` → `src/App.tsx` — Entry and routing
-- `src/pages/` — Page-level components (PascalCase)
-- `src/components/` — Shared layout/UI components
-- `src/lib/` — API client, auth client, session helpers
-- `src/test/` — Test setup and utilities
+---
 
-### Key Patterns
+## React Conventions
 
-- **Singleton services:** `prisma`, `stripe`, `auth`, `logger` are module-level singletons
-- **No dependency injection** — modules import singletons directly
-- **No barrel exports** — each module imported individually by path
-- **Workspace packages** referenced via `workspace:*` in `package.json`
-- **ESM throughout** — `"type": "module"` in all packages
+### Component Structure
+```typescript
+// 1. Imports (external → internal → relative)
+import { useState } from "react";
+
+// 2. Type imports
+import type { Product } from "@/types";
+
+// 3. Component declaration
+export function ProductPage({ productId }: { productId: string }) {
+  // 4. Hooks (top level)
+  const [product, setProduct] = useState<Product | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // 5. Event handlers
+  const handleBuy = async () => {
+    // ...
+  };
+
+  // 6. Effects
+  useEffect(() => {
+    // ...
+  }, [productId]);
+
+  // 7. Conditional returns (guard clauses)
+  if (!product) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
+
+  // 8. Render
+  return (
+    <div>
+      <h1>{product.name}</h1>
+      <button onClick={handleBuy}>Buy</button>
+    </div>
+  );
+}
+```
+
+### Hooks
+- Custom hooks in `lib/` directory
+- Prefix with `use`: `useAuth()`, `useProducts()`
+- Extract reusable logic from components
+
+---
+
+## API Route Conventions
+
+### File Organization
+One file per domain in `apps/server/src/routes/`:
+
+```
+routes/
+├── auth.ts         # All auth endpoints
+├── products.ts     # All product endpoints
+├── checkout.ts     # Checkout flow
+└── webhooks.ts     # Webhook handlers
+```
+
+### Route Handler Pattern
+```typescript
+// ✅ Consistent route structure
+app.route({
+  method: "GET",
+  url: "/api/products/:id",
+  handler: async (request, reply) => {
+    try {
+      // 1. Validate input
+      const { id } = request.params as { id: string };
+
+      // 2. Business logic
+      const product = await db.product.findUnique({ where: { id } });
+
+      // 3. Error handling
+      if (!product) {
+        return reply.status(404).send({ error: "Product not found" });
+      }
+
+      // 4. Response
+      return { success: true, data: product };
+    } catch (error) {
+      // 5. Error response
+      return reply.status(500).send({ error: "Internal server error" });
+    }
+  },
+});
+```
+
+---
+
+## Database Conventions
+
+### Schema Organization (`prisma/schema.prisma`)
+- Group related models together
+- Use descriptive field names
+- Add indexes for frequently queried fields
+- Use `@default(uuid())` for IDs
+- Use `@updatedAt` for automatic timestamps
+
+```prisma
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  price       Int
+  description String?
+  imageUrl    String?
+  fileUrl     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  orders      Order[]
+}
+
+model Order {
+  id         String   @id @default(uuid())
+  userId     String
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([productId])
+}
+```
+
+---
+
+## Testing Conventions
+
+### AAA Pattern
+Always follow Arrange, Act, Assert:
+
+```typescript
+test("should increment counter when button is clicked", () => {
+  // Arrange
+  render(<Counter />);
+  const button = screen.getByRole("button", { name: /increment/i });
+  const counter = screen.getByTestId("counter-value");
+
+  // Act
+  fireEvent.click(button);
+
+  // Assert
+  expect(counter).toHaveTextContent("1");
+});
+```
+
+### Test Organization
+- Test files in `__tests__/` folders alongside source
+- E2E tests in `e2e/tests/`
+- One test file per source file
+- Descriptive test names (`should ... when ...`)
+
+---
+
+## Environment Variables
+
+### Required (always set)
+```bash
+DATABASE_URL=
+BETTER_AUTH_SECRET=
+BETTER_AUTH_URL=
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+FRONTEND_URL=
+CORS_ORIGIN=
+API_URL=
+```
+
+### Optional
+```bash
+LOG_LEVEL=info
+```
+
+### Naming
+- SCREAMING_SNAKE_CASE
+- Group by purpose with comments
+- Document in `.env.example`
+
+---
+
+## Comments & Documentation
+
+### When to Comment
+- Explain **why**, not **what**
+- Document non-obvious decisions
+- Add TODOs for future work
+
+```typescript
+// ✅ Good: Explains why
+// Using bcrypt with 10 rounds for security vs performance balance
+const hash = await bcrypt.hash(password, 10);
+
+// ❌ Bad: States the obvious
+// Set the user's email
+user.email = email;
+```
+
+### JSDoc
+Use for exported functions with complex behavior:
+
+```typescript
+/**
+ * Creates a Stripe checkout session for a product.
+ * @param productId - The product ID to purchase
+ * @returns Checkout URL or error message
+ */
+export async function createCheckoutSession(productId: string) {
+  // ...
+}
+```
+
+---
+
+## File Size Guidelines
+
+- **Target**: Keep files under 200 lines
+- **Maximum**: 300 lines (extract if exceeded)
+- **Split**: Large components into smaller sub-components
+
+---
+
+## Monorepo Conventions
+
+### Internal Dependencies
+Use `workspace:*` protocol in `package.json`:
+
+```json
+{
+  "dependencies": {
+    "db": "workspace:*",
+    "logger": "workspace:*"
+  }
+}
+```
+
+### Shared Code Location
+- **Database**: `packages/db/`
+- **Utilities**: Consider if truly shared before creating package
+- **Types**: Prefer defining in app that uses them, unless truly shared
+
+---
+
+## Git Conventions
+
+### Commit Messages
+- Use clear, descriptive messages
+- Separate tidying from behavior changes
+- Reference issues when applicable
+
+```
+feat: add Stripe checkout integration
+fix: resolve auth token expiration issue
+refactor: extract file upload logic to lib/upload.ts
+```
+
+---
+
+## CSS/Styling Conventions
+
+### Tailwind CSS v4
+- Use utility classes over custom CSS
+- Keep custom CSS in `index.css`
+- Use `@apply` sparingly
+
+```tsx
+// ✅ Tailwind utilities
+<div className="flex items-center gap-4 p-4 rounded-lg bg-white shadow-md">
+
+// ❌ Custom CSS (avoid when possible)
+<div style={{ display: 'flex', padding: '16px' }}>
+```
+
+---
+
+## Path Conventions Summary
+
+| Pattern | Example |
+|---------|---------|
+| React components | `@/components/ComponentName` |
+| Pages | `@/pages/PageName` |
+| Utilities | `@/lib/utilName` |
+| Types | `@/types/typeName` |
+| API routes | `/api/resourceName` |
+| Shared packages | `db`, `logger` |
