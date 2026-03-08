@@ -1,7 +1,16 @@
+import type { Readable } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import { auth, headersToHeaders } from "../lib/auth";
 import { prisma } from "../lib/prisma";
 import { saveImage, validateImageFile } from "../lib/upload";
+
+async function streamToBuffer(stream: Readable): Promise<Buffer> {
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of stream) {
+    chunks.push(chunk as Uint8Array);
+  }
+  return Buffer.concat(chunks);
+}
 
 export async function profileRoutes(server: FastifyInstance): Promise<void> {
   server.get("/api/profile", async (request, reply) => {
@@ -100,7 +109,8 @@ export async function profileRoutes(server: FastifyInstance): Promise<void> {
       if (validationError) {
         return reply.status(400).send({ error: validationError });
       }
-      updateData.avatarUrl = await saveImage(avatar.file, avatar.filename);
+      const avatarBuffer = await streamToBuffer(avatar.file);
+      updateData.avatarUrl = await saveImage(avatarBuffer, avatar.filename);
     }
 
     const user = await prisma.user.update({
