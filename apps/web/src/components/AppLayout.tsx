@@ -38,6 +38,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           ) : session?.user ? (
             <>
               <Link
+                to="/dashboard"
+                style={{
+                  color: "#2563eb",
+                  textDecoration: "none",
+                  fontSize: "0.875rem",
+                }}
+              >
+                Dashboard
+              </Link>
+              <Link
                 to="/dashboard/settings"
                 style={{
                   color: "#2563eb",
