@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -45,7 +46,6 @@ vi.mock("../../lib/prisma", () => ({
 vi.mock("node:fs", () => ({
   existsSync: vi.fn(() => true),
   createReadStream: vi.fn(() => {
-    const { Readable } = require("node:stream");
     return Readable.from(["file content"]);
   }),
 }));
@@ -109,10 +109,14 @@ describe("file routes", () => {
       expect(response.headers["content-disposition"]).toContain("Test Product");
       expect(response.headers["content-type"]).toBe("application/octet-stream");
       expect(mockPurchaseUpdateMany).toHaveBeenCalledWith({
-        where: { id: "purchase-1", downloadAttempts: { lt: 3 } },
+        where: {
+          id: "purchase-1",
+          downloadAttempts: 0,
+          OR: [{ boundIpAddress: null }, { boundIpAddress: "127.0.0.1" }],
+        },
         data: {
           downloadAttempts: { increment: 1 },
-          boundIpAddress: expect.any(String),
+          boundIpAddress: "127.0.0.1",
         },
       });
     });
@@ -282,10 +286,7 @@ describe("file routes", () => {
       // Arrange
       mockGetSession.mockResolvedValueOnce({ user: mockCreator } as any);
       mockPurchaseFindUnique.mockResolvedValueOnce(mockPurchase as any);
-      mockPurchaseUpdate.mockResolvedValueOnce({
-        ...mockPurchase,
-        revokedAt: new Date(),
-      } as any);
+      mockPurchaseUpdateMany.mockResolvedValueOnce({ count: 1 } as any);
 
       // Act
       const response = await app.inject({
@@ -296,8 +297,8 @@ describe("file routes", () => {
       // Assert
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({ revoked: true });
-      expect(mockPurchaseUpdate).toHaveBeenCalledWith({
-        where: { id: "purchase-1" },
+      expect(mockPurchaseUpdateMany).toHaveBeenCalledWith({
+        where: { id: "purchase-1", revokedAt: null },
         data: { revokedAt: expect.any(Date) },
       });
     });
@@ -366,6 +367,27 @@ describe("file routes", () => {
       // Assert
       expect(response.statusCode).toBe(409);
       expect(response.json()).toEqual({ error: "Token already revoked" });
+    });
+
+    it("can revoke a token that's already at max download attempts", async () => {
+      // Arrange
+      mockGetSession.mockResolvedValueOnce({ user: mockCreator } as any);
+      mockPurchaseFindUnique.mockResolvedValueOnce({
+        ...mockPurchase,
+        downloadAttempts: 3, // Already exhausted
+        maxDownloadAttempts: 3,
+      } as any);
+      mockPurchaseUpdateMany.mockResolvedValueOnce({ count: 1 } as any);
+
+      // Act
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/download/exhausted-token/revoke",
+      });
+
+      // Assert
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ revoked: true });
     });
   });
 
