@@ -90,18 +90,22 @@ model Product {
 }
 
 model Purchase {
-  id                   String   @id @default(cuid())
-  productId            String
-  product              Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  customerEmail        String
-  customerName         String?
+  id                    String    @id @default(cuid())
+  productId             String
+  product               Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customerEmail         String
+  customerName          String?
   stripePaymentIntentId String
-  stripeSessionId      String?
-  amount               Int
-  status               String
-  downloadToken        String   @unique
-  downloadExpiresAt    DateTime
-  createdAt            DateTime @default(now())
+  stripeSessionId       String?
+  amount                Int
+  status                String
+  downloadToken         String    @unique
+  downloadExpiresAt     DateTime
+  downloadAttempts      Int       @default(0)
+  maxDownloadAttempts   Int       @default(3)
+  boundIpAddress        String?
+  revokedAt             DateTime?
+  createdAt             DateTime  @default(now())
 
   @@index([productId])
   @@index([customerEmail])

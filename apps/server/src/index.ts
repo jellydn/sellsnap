@@ -15,6 +15,7 @@ import { analyticsRoutes } from "./routes/analytics";
 import { authRoutes } from "./routes/auth";
 import { checkoutRoutes } from "./routes/checkout";
 import { creatorRoutes } from "./routes/creators";
+import { fileRoutes } from "./routes/files";
 import { healthRoutes } from "./routes/health";
 import { productRoutes } from "./routes/products";
 import { profileRoutes } from "./routes/profile";
@@ -25,6 +26,7 @@ ensureUploadDirs();
 
 const server = Fastify({
   logger: true,
+  trustProxy: true,
 });
 
 async function start() {
@@ -62,13 +64,14 @@ async function start() {
   await server.register(checkoutRoutes);
   await server.register(webhookRoutes);
   await server.register(purchaseRoutes);
+  await server.register(fileRoutes);
   await server.register(profileRoutes);
   await server.register(analyticsRoutes);
 
   if (process.env.NODE_ENV === "production") {
     const frontendPath = path.join(__dirname, "../../web/dist");
 
-    server.get("/", async (request, reply) => {
+    server.get("/", async (_request, reply) => {
       return reply.sendFile("index.html");
     });
 
