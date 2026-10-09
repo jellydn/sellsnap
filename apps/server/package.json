@@ -21,7 +21,7 @@
     "@fastify/multipart": "^9.4.0",
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/static": "^9.0.0",
-    "@prisma/client": "6.19.2",
+    "@prisma/client": "6.19.3",
     "@sellsnap/logger": "workspace:*",
     "better-auth": "^1.5.3",
     "db": "workspace:*",
