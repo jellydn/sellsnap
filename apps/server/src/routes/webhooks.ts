@@ -65,7 +65,9 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
       }
 
       const downloadToken = randomUUID();
-      const downloadExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const expirationHours = parseInt(process.env.DOWNLOAD_EXPIRATION_HOURS || "2", 10);
+      const maxDownloadAttempts = parseInt(process.env.MAX_DOWNLOAD_ATTEMPTS || "3", 10);
+      const downloadExpiresAt = new Date(Date.now() + expirationHours * 60 * 60 * 1000);
 
       const stripePaymentIntentId =
         typeof session.payment_intent === "string"
@@ -83,6 +85,7 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
           status: PURCHASE_STATUS.COMPLETED,
           downloadToken,
           downloadExpiresAt,
+          maxDownloadAttempts,
         },
       });
 
@@ -92,7 +95,7 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
 
 Product: ${product.title}
 Download Link: ${downloadLink}
-This link will expire in 24 hours.
+This link will expire in ${expirationHours} hours.
 
 If you have any questions, please contact the seller.`;
 
