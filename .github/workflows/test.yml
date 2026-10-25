@@ -66,6 +66,22 @@ jobs:
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sellsnap_test
+          POSTGRES_PASSWORD: sellsnap_test
+          POSTGRES_DB: sellsnap_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgresql://sellsnap_test:sellsnap_test@localhost:5432/sellsnap_test
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -86,4 +102,8 @@ jobs:
         run: pnpm -F db db:generate
 
       - name: Run tests
-        run: pnpm test
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+        run: |
+          pnpm -F db exec prisma db push --skip-generate
+          pnpm test

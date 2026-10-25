@@ -101,6 +101,9 @@ model Purchase {
   status               String
   downloadToken        String   @unique
   downloadExpiresAt    DateTime
+  downloadAttempts     Int      @default(0)
+  downloadIp           String?
+  downloadRevokedAt    DateTime?
   createdAt            DateTime @default(now())
 
   @@index([productId])

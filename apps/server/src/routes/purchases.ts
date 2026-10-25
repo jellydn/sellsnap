@@ -1,6 +1,7 @@
+import { createHash } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
 import { extname } from "node:path";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { getSessionFromRequest } from "../lib/auth";
 import { PURCHASE_STATUS } from "../lib/constants";
 import { prisma } from "../lib/prisma";
@@ -44,9 +45,58 @@ export async function purchaseRoutes(server: FastifyInstance): Promise<void> {
     };
   });
 
+  server.patch("/api/purchases/:id/revoke-download", async (request, reply) => {
+    const session = await getSessionFromRequest(request);
+    if (!session?.user) {
+      return reply.status(401).send({ error: "Unauthorized" });
+    }
+
+    const { id } = request.params as { id: string };
+    const revoked = await prisma.purchase.updateMany({
+      where: { id, product: { creatorId: session.user.id } },
+      data: { downloadRevokedAt: new Date() },
+    });
+
+    if (revoked.count === 0) {
+      return reply.status(404).send({ error: "Purchase not found" });
+    }
+
+    request.log.info({ purchaseId: id, creatorId: session.user.id }, "Download token revoked");
+    return reply.status(204).send();
+  });
+
   server.get(
     "/api/download/:token",
     {
+      childLoggerFactory(logger, bindings, options) {
+        return logger.child(bindings, {
+          ...options,
+          serializers: {
+            ...options.serializers,
+            req(request: FastifyRequest) {
+              return { method: request.method, url: "/api/download/[REDACTED]", ip: request.ip };
+            },
+          },
+        });
+      },
+      onRequest: async (request, reply) => {
+        reply.header("Cache-Control", "no-store");
+        reply.header("Referrer-Policy", "no-referrer");
+        if (request.method === "HEAD") {
+          return reply.status(405).header("Allow", "GET").send();
+        }
+      },
+      onResponse: async (request, reply) => {
+        const { token } = request.params as { token: string };
+        request.log.info(
+          {
+            tokenFingerprint: createHash("sha256").update(token).digest("hex"),
+            ip: request.ip,
+            statusCode: reply.statusCode,
+          },
+          "Download attempt",
+        );
+      },
       config: {
         rateLimit: {
           max: 10,
@@ -68,12 +118,44 @@ export async function purchaseRoutes(server: FastifyInstance): Promise<void> {
         return reply.status(404).send({ error: "Download not found" });
       }
 
-      if (purchase.downloadExpiresAt < new Date()) {
-        return reply.status(410).send({ error: "Download link expired" });
+      if (purchase.status !== PURCHASE_STATUS.COMPLETED) {
+        return reply.status(403).send({ error: "Download unavailable" });
+      }
+
+      if (purchase.downloadRevokedAt || purchase.downloadExpiresAt <= new Date()) {
+        return reply.status(410).send({ error: "Download link expired or revoked" });
+      }
+
+      if (purchase.downloadIp && purchase.downloadIp !== request.ip) {
+        return reply.status(403).send({ error: "Download link is bound to another IP address" });
+      }
+
+      if (purchase.downloadAttempts >= 3) {
+        return reply.status(429).send({ error: "Download limit reached" });
       }
 
       if (!existsSync(purchase.product.filePath)) {
         return reply.status(404).send({ error: "File not found" });
+      }
+
+      // Claim access atomically so concurrent requests cannot bypass binding or the limit.
+      const claimed = await prisma.purchase.updateMany({
+        where: {
+          id: purchase.id,
+          status: PURCHASE_STATUS.COMPLETED,
+          downloadExpiresAt: { gt: new Date() },
+          downloadRevokedAt: null,
+          downloadAttempts: { lt: 3 },
+          OR: [{ downloadIp: null }, { downloadIp: request.ip }],
+        },
+        data: {
+          downloadAttempts: { increment: 1 },
+          downloadIp: request.ip,
+        },
+      });
+
+      if (claimed.count === 0) {
+        return reply.status(403).send({ error: "Download no longer available" });
       }
 
       const fileName =
