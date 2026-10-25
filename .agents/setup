@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+SECONDS=0
+
+# Match CI's Node 22 major version; keep the orb's global runtime unchanged.
+node_version="22.23.4"
+case "$(uname -m)" in
+  x86_64) architecture="x64" ;;
+  aarch64) architecture="arm64" ;;
+  *) echo "Unsupported Node architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+toolchain_root="$HOME/.local/share/sellsnap"
+node_name="node-v${node_version}-linux-${architecture}"
+node_dir="$toolchain_root/$node_name"
+
+if [[ ! -x "$node_dir/bin/node" ]]; then
+  echo "Installing Node $node_version"
+  download_dir="$(mktemp -d)"
+  trap 'rm -rf "$download_dir"' EXIT
+  archive="$download_dir/$node_name.tar.xz"
+  base_url="https://nodejs.org/dist/v$node_version"
+  curl --fail --silent --show-error --location --retry 2 \
+    "$base_url/$node_name.tar.xz" --output "$archive"
+  curl --fail --silent --show-error --location --retry 2 \
+    "$base_url/SHASUMS256.txt" --output "$download_dir/SHASUMS256.txt"
+  checksum="$(awk -v file="$node_name.tar.xz" '$2 == file { print $1 }' "$download_dir/SHASUMS256.txt")"
+  printf '%s  %s\n' "$checksum" "$archive" | sha256sum --check --status
+  mkdir -p "$toolchain_root"
+  tar -xJf "$archive" -C "$toolchain_root"
+fi
+export PATH="$node_dir/bin:$PATH"
+
+# Amp and supervised services use separate non-interactive login shells.
+profile_marker="# SellSnap orb Node toolchain"
+if ! rg --fixed-strings --line-regexp --quiet "$profile_marker" "$HOME/.bash_profile" 2>/dev/null; then
+  cat >> "$HOME/.bash_profile" <<EOF
+
+$profile_marker
+case "\$PWD" in
+  "$repo_root"|"$repo_root"/*) export PATH="$node_dir/bin:\$PATH" ;;
+esac
+EOF
+fi
+
+package_manager="$(node -p 'require("./package.json").packageManager')"
+if [[ ! -x "$node_dir/bin/pnpm" ]] || \
+  [[ "$("$node_dir/bin/pnpm" --version)" != "${package_manager#pnpm@}" ]]; then
+  npm install --global --prefix "$node_dir" "$package_manager"
+fi
+
+echo "Installing locked dependencies with $(node --version) and pnpm $(pnpm --version)"
+pnpm install --frozen-lockfile
+echo "Dependencies ready after ${SECONDS}s; generating Prisma client"
+pnpm --filter db exec prisma generate
+echo "Orb setup finished in ${SECONDS}s"
