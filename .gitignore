@@ -47,3 +47,6 @@ apps/web/dist/
 tmp/
 temp/
 .claude/settings.local.json
+
+# Orb portal metadata is local to each running orb.
+.amp/portals/*
