@@ -52,15 +52,21 @@ vi.mock("../../lib/prisma", () => ({
 }));
 
 vi.mock("../../lib/upload", () => ({
-  saveFile: (...args: unknown[]) => mockSaveFile(...args),
-  saveImage: (...args: unknown[]) => mockSaveImage(...args),
+  withUpload: async (
+    _userId: string,
+    action: (upload: {
+      saveFile: typeof mockSaveFile;
+      saveImage: typeof mockSaveImage;
+      removeAfterCommit: () => Promise<void>;
+    }) => Promise<unknown>,
+  ) =>
+    action({
+      saveFile: mockSaveFile,
+      saveImage: mockSaveImage,
+      removeAfterCommit: async () => {},
+    }),
   validateImageFile: vi.fn(() => null),
   validateProductFile: vi.fn(() => null),
-}));
-
-vi.mock("node:fs", () => ({
-  existsSync: vi.fn(() => false),
-  unlinkSync: vi.fn(),
 }));
 
 // Register multipart plugin for Fastify
@@ -563,7 +569,7 @@ describe("product routes", () => {
   });
 
   describe("DELETE /api/products/:id", () => {
-    it("deletes product and files", async () => {
+    it("deletes product", async () => {
       // Arrange - Set up authenticated user and product
       mockGetSession.mockResolvedValueOnce({ user: mockUser } as any);
 
@@ -576,9 +582,6 @@ describe("product routes", () => {
 
       mockProductFindUnique.mockResolvedValueOnce(product as any);
       mockProductDelete.mockResolvedValueOnce(undefined as any);
-
-      const { existsSync } = await import("node:fs");
-      vi.mocked(existsSync).mockReturnValue(true);
 
       // Act - Delete product
       const response = await app.inject({

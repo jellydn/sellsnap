@@ -4,7 +4,7 @@
  * Reusable utilities for API testing with authentication and test data management.
  */
 
-import type { APIRequestContext } from "@playwright/test";
+import { type APIRequestContext, type APIResponse, test } from "@playwright/test";
 
 // Note: baseURL will be provided by Playwright's request context
 // We use relative paths which will resolve to the correct server
@@ -131,16 +131,35 @@ export async function signInUser(
 /**
  * Sign out the current user
  */
-export async function signOutUser(
-	request: APIRequestContext,
-	session: AuthSession,
-): Promise<void> {
+export async function signOutUser(request: APIRequestContext, session: AuthSession): Promise<void> {
 	await request.post(`${AUTH_BASE}/sign-out`, {
 		headers: {
 			cookie: session.cookie,
 			Origin: TEST_ORIGIN,
 		},
 	});
+}
+
+// All E2E users share an IP. Wait for the real upload limiter instead of disabling it.
+export async function postTestProduct(
+	request: APIRequestContext,
+	options: Parameters<APIRequestContext["post"]>[1],
+): Promise<APIResponse> {
+	const response = await request.post(`${API_BASE}/products`, options);
+	const retryAfter = Number(response.headers()["retry-after"]);
+	if (
+		response.status() !== 429 ||
+		!Number.isFinite(retryAfter) ||
+		retryAfter < 0 ||
+		retryAfter > 60
+	) {
+		return response;
+	}
+	const delay = retryAfter * 1000 + 100;
+	test.setTimeout(test.info().timeout + delay + 2000);
+	await response.dispose();
+	await new Promise((resolve) => setTimeout(resolve, delay));
+	return request.post(`${API_BASE}/products`, options);
 }
 
 /**
@@ -168,7 +187,7 @@ export async function createTestProduct(
 	const price = String(productData?.price ?? 999); // $9.99
 	const previewContent = "Test preview content";
 
-	const response = await request.post(`${API_BASE}/products`, {
+	const response = await postTestProduct(request, {
 		headers: {
 			cookie: session.cookie,
 			Origin: TEST_ORIGIN,

@@ -2,6 +2,8 @@ import Fastify, { type FastifyInstance, type FastifyLoggerOptions } from "fastif
 
 export function createServer(loggerOptions: FastifyLoggerOptions = {}): FastifyInstance {
   const server = Fastify({
+    // Incomplete request bodies must not hold upload admission indefinitely.
+    requestTimeout: 60_000,
     trustProxy:
       process.env.TRUSTED_PROXIES?.split(",")
         .map((ip) => ip.trim())

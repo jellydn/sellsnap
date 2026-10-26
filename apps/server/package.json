@@ -26,6 +26,8 @@
     "better-auth": "^1.5.3",
     "db": "workspace:*",
     "fastify": "^5.2.1",
+    "file-type": "^21.3.4",
+    "sharp": "^0.35.5",
     "stripe": "^20.4.0",
     "zod": "^4.0.0"
   },
