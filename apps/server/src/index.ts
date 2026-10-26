@@ -66,26 +66,10 @@ async function start() {
   if (process.env.NODE_ENV === "production") {
     const frontendPath = path.join(__dirname, "../../web/dist");
 
-    server.get("/", async (request, reply) => {
-      return reply.sendFile("index.html");
-    });
-
-    server.setNotFoundHandler(async (request, reply) => {
-      const url = request.url;
-      if (url.startsWith("/api/") || url.startsWith("/uploads/")) {
-        return reply.status(404).send({ error: "Not found" });
-      }
-      try {
-        return reply.sendFile("index.html");
-      } catch {
-        return reply.status(404).send("Not found");
-      }
-    });
-
     await server.register(await import("@fastify/static"), {
       root: frontendPath,
       wildcard: false,
-      decorateReply: false,
+      decorateReply: true,
     });
   }
 

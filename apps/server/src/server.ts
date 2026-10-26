@@ -24,6 +24,19 @@ export function createServer(loggerOptions: FastifyLoggerOptions = {}): FastifyI
   });
 
   // Fastify's default 404 handler logs the raw URL in its message as well as req.url.
-  server.setNotFoundHandler((_request, reply) => reply.status(404).send({ error: "Not found" }));
+  server.setNotFoundHandler(async (request, reply) => {
+    if (
+      process.env.NODE_ENV !== "production" ||
+      request.url.startsWith("/api/") ||
+      request.url.startsWith("/uploads/")
+    ) {
+      return reply.status(404).send({ error: "Not found" });
+    }
+    try {
+      return reply.sendFile("index.html");
+    } catch {
+      return reply.status(404).send("Not found");
+    }
+  });
   return server;
 }

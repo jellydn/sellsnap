@@ -1,4 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import fastifyStatic from "@fastify/static";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createServer } from "../server";
 
@@ -47,6 +51,31 @@ describe("server security defaults", () => {
       expect(logs).toContain("request completed");
     } finally {
       await server.close();
+    }
+  });
+
+  it("serves the production SPA fallback without replacing API or upload 404 responses", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const directory = await mkdtemp(join(tmpdir(), "sellsnap-spa-"));
+    const html = "<!doctype html><title>SellSnap production fixture</title>";
+    const server = createServer({ level: "silent" });
+    try {
+      await writeFile(join(directory, "index.html"), html);
+      await server.register(fastifyStatic, { root: directory, wildcard: false });
+      for (const url of ["/", "/purchase/success"]) {
+        const response = await server.inject(url);
+        expect(response.statusCode).toBe(200);
+        expect(response.headers["content-type"]).toContain("text/html");
+        expect(response.body).toBe(html);
+      }
+      for (const url of ["/api/download/unknown", "/uploads/missing"]) {
+        const response = await server.inject(url);
+        expect(response.statusCode).toBe(404);
+        expect(response.json()).toEqual({ error: "Not found" });
+      }
+    } finally {
+      await server.close();
+      await rm(directory, { recursive: true, force: true });
     }
   });
 });
