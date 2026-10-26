@@ -1,6 +1,8 @@
 FROM node:20-alpine
 WORKDIR /app
 
+RUN apk add --no-cache util-linux
+
 ARG VITE_API_URL
 ARG BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 ENV VITE_API_URL=$VITE_API_URL

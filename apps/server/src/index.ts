@@ -25,6 +25,8 @@ ensureUploadDirs();
 
 const server = Fastify({
   logger: true,
+  // Incomplete request bodies must not hold upload admission indefinitely.
+  requestTimeout: 60_000,
 });
 
 async function start() {

@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
 import type { MultipartFile } from "@fastify/multipart";
 import { logger } from "@sellsnap/logger";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -8,7 +6,7 @@ import { getSessionFromRequest } from "../lib/auth";
 import { PURCHASE_STATUS } from "../lib/constants";
 import { paginate, parseLimit } from "../lib/pagination";
 import { prisma } from "../lib/prisma";
-import { saveFile, saveImage, validateImageFile, validateProductFile } from "../lib/upload";
+import { validateImageFile, validateProductFile, withUpload } from "../lib/upload";
 
 interface PrismaError {
   code: string;
@@ -18,15 +16,6 @@ function isPrismaError(error: unknown): error is PrismaError {
   return (
     typeof error === "object" && error !== null && "code" in error && typeof error.code === "string"
   );
-}
-
-function safeDeletePath(path: string, context: string): void {
-  if (!path || !existsSync(path)) return;
-  try {
-    unlinkSync(path);
-  } catch (error) {
-    logger.warn({ error, path }, `Failed to delete ${context}`);
-  }
 }
 
 function toProductResponse(product: {
@@ -131,7 +120,7 @@ async function parseMultipartData(request: FastifyRequest): Promise<ParsedMultip
   let productFile: ParsedFile | null = null;
 
   try {
-    const parts = request.parts();
+    const parts = request.parts({ limits: { files: 2, fields: 10, parts: 12 } });
     for await (const part of parts) {
       if (part.type === "file") {
         const file = part as MultipartFile;
@@ -148,7 +137,8 @@ async function parseMultipartData(request: FastifyRequest): Promise<ParsedMultip
       }
     }
     return { fields, coverImage, productFile };
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && "statusCode" in error && error.statusCode === 413) throw error;
     return null;
   }
 }
@@ -276,212 +266,235 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
     return toProductResponse(product);
   });
 
-  server.post("/api/products", async (request, reply) => {
-    const session = await requireAuth(request, reply);
-    if (!session?.user) return;
+  server.post(
+    "/api/products",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const session = await requireAuth(request, reply);
+      if (!session?.user) return;
 
-    const multipartData = await parseMultipartData(request);
-    if (!multipartData) {
-      return reply.status(400).send({ error: "Invalid request format" });
-    }
+      return withUpload(session.user.id, async (upload) => {
+        const multipartData = await parseMultipartData(request);
+        if (!multipartData) {
+          return reply.status(400).send({ error: "Invalid request format" });
+        }
 
-    const { fields, coverImage, productFile } = multipartData;
+        const { fields, coverImage, productFile } = multipartData;
 
-    const title = fields.title;
-    const description = fields.description || "";
-    const priceStr = fields.price;
-    const previewContent = fields.previewContent || null;
+        const title = fields.title;
+        const description = fields.description || "";
+        const priceStr = fields.price;
+        const previewContent = fields.previewContent || null;
 
-    if (!title || !priceStr || !productFile) {
-      return reply
-        .status(400)
-        .send({ error: "Missing required fields: title, price, productFile" });
-    }
+        if (!title || !priceStr || !productFile) {
+          return reply
+            .status(400)
+            .send({ error: "Missing required fields: title, price, productFile" });
+        }
 
-    const fileValidationError = validateProductFile(productFile.filename);
-    if (fileValidationError) {
-      return reply.status(400).send({ error: fileValidationError });
-    }
+        const fileValidationError = validateProductFile(productFile.filename);
+        if (fileValidationError) {
+          return reply.status(400).send({ error: fileValidationError });
+        }
 
-    const price = Math.round(Number.parseFloat(priceStr) * 100);
-    if (Number.isNaN(price) || price < 0) {
-      return reply.status(400).send({ error: "Invalid price" });
-    }
+        const price = Math.round(Number.parseFloat(priceStr) * 100);
+        if (Number.isNaN(price) || price < 0) {
+          return reply.status(400).send({ error: "Invalid price" });
+        }
 
-    if (coverImage) {
-      const validationError = validateImageFile(coverImage.mimetype, coverImage.filename);
-      if (validationError) {
-        return reply.status(400).send({ error: validationError });
-      }
-    }
+        if (coverImage) {
+          const validationError = validateImageFile(coverImage.mimetype, coverImage.filename);
+          if (validationError) {
+            return reply.status(400).send({ error: validationError });
+          }
+        }
 
-    const baseSlug = title
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .slice(0, 50);
+        const baseSlug = title
+          .toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, "")
+          .replace(/\s+/g, "-")
+          .slice(0, 50);
 
-    let slug = baseSlug;
-    const existingWithBaseSlug = await prisma.product.findUnique({
-      where: { slug: baseSlug },
-    });
+        let slug = baseSlug;
+        const existingWithBaseSlug = await prisma.product.findUnique({
+          where: { slug: baseSlug },
+        });
 
-    if (existingWithBaseSlug) {
-      const lastSimilar = await prisma.product.findFirst({
-        where: { slug: { startsWith: `${baseSlug}-` } },
-        orderBy: { slug: "desc" },
+        if (existingWithBaseSlug) {
+          const lastSimilar = await prisma.product.findFirst({
+            where: { slug: { startsWith: `${baseSlug}-` } },
+            orderBy: { slug: "desc" },
+          });
+
+          const slugSuffix = lastSimilar
+            ? parseInt(lastSimilar.slug.match(/^.+-(\d+)$/)?.[1] || "0", 10) + 1
+            : 1;
+
+          slug = `${baseSlug}-${slugSuffix}`;
+        }
+
+        let coverImageUrl: string | null = null;
+        if (coverImage) {
+          coverImageUrl = await upload.saveImage(coverImage.buffer, coverImage.filename);
+        }
+
+        const productFilePath = await upload.saveFile(productFile.buffer, productFile.filename);
+
+        try {
+          const product = await prisma.product.create({
+            data: {
+              title,
+              slug,
+              description,
+              price,
+              coverImageUrl,
+              filePath: productFilePath,
+              previewContent,
+              published: false,
+              viewCount: 0,
+              creatorId: session.user.id,
+            },
+          });
+
+          return toProductResponse(product);
+        } catch (error) {
+          if (isPrismaError(error) && error.code === "P2002") {
+            slug = `${baseSlug}-${randomUUID().slice(0, 8)}`;
+            const product = await prisma.product.create({
+              data: {
+                title,
+                slug,
+                description,
+                price,
+                coverImageUrl,
+                filePath: productFilePath,
+                previewContent,
+                published: false,
+                viewCount: 0,
+                creatorId: session.user.id,
+              },
+            });
+
+            return toProductResponse(product);
+          }
+          throw error;
+        }
       });
+    },
+  );
 
-      const slugSuffix = lastSimilar
-        ? parseInt(lastSimilar.slug.match(/^.+-(\d+)$/)?.[1] || "0", 10) + 1
-        : 1;
+  server.put(
+    "/api/products/:id",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const session = await requireAuth(request, reply);
+      if (!session?.user) return;
 
-      slug = `${baseSlug}-${slugSuffix}`;
-    }
+      return withUpload(session.user.id, async (upload) => {
+        const { id } = request.params as { id: string };
 
-    let coverImageUrl: string | null = null;
-    if (coverImage) {
-      coverImageUrl = await saveImage(coverImage.buffer, coverImage.filename);
-    }
+        const existingProduct = await prisma.product.findUnique({
+          where: { id },
+        });
 
-    const productFilePath = await saveFile(productFile.buffer, productFile.filename);
+        if (!existingProduct) {
+          return reply.status(404).send({ error: "Product not found" });
+        }
 
-    try {
-      const product = await prisma.product.create({
-        data: {
-          title,
-          slug,
-          description,
-          price,
-          coverImageUrl,
-          filePath: productFilePath,
-          previewContent,
-          published: false,
-          viewCount: 0,
-          creatorId: session.user.id,
-        },
-      });
+        if (existingProduct.creatorId !== session.user.id) {
+          return reply.status(403).send({ error: "Forbidden" });
+        }
 
-      return toProductResponse(product);
-    } catch (error) {
-      if (isPrismaError(error) && error.code === "P2002") {
-        slug = `${baseSlug}-${randomUUID().slice(0, 8)}`;
-        const product = await prisma.product.create({
-          data: {
-            title,
-            slug,
-            description,
-            price,
-            coverImageUrl,
-            filePath: productFilePath,
-            previewContent,
-            published: false,
-            viewCount: 0,
-            creatorId: session.user.id,
-          },
+        const multipartData = await parseMultipartData(request);
+        if (!multipartData) {
+          return reply.status(400).send({ error: "Invalid request format" });
+        }
+
+        const { fields, coverImage, productFile } = multipartData;
+
+        const title = fields.title;
+        const description = fields.description;
+        const priceStr = fields.price;
+        const slug = fields.slug;
+        const previewContent = fields.previewContent;
+
+        const updateData: {
+          title?: string;
+          description?: string;
+          price?: number;
+          slug?: string;
+          previewContent?: string | null;
+          coverImageUrl?: string | null;
+          filePath?: string;
+        } = {};
+
+        if (title !== undefined) updateData.title = title;
+        if (description !== undefined) updateData.description = description;
+        if (priceStr !== undefined) {
+          const price = Math.round(Number.parseFloat(priceStr) * 100);
+          if (Number.isNaN(price) || price < 0) {
+            return reply.status(400).send({ error: "Invalid price" });
+          }
+          updateData.price = price;
+        }
+        if (previewContent !== undefined) updateData.previewContent = previewContent || null;
+
+        if (slug !== undefined && slug !== existingProduct.slug) {
+          const existingWithSlug = await prisma.product.findUnique({
+            where: { slug },
+          });
+          if (existingWithSlug) {
+            return reply.status(400).send({ error: "Slug already exists" });
+          }
+          updateData.slug = slug;
+        }
+
+        if (productFile) {
+          const fileValidationError = validateProductFile(productFile.filename);
+          if (fileValidationError) {
+            return reply.status(400).send({ error: fileValidationError });
+          }
+        }
+        let coverImageUrl: string | null = existingProduct.coverImageUrl;
+        if (coverImage) {
+          const validationError = validateImageFile(coverImage.mimetype, coverImage.filename);
+          if (validationError) {
+            return reply.status(400).send({ error: validationError });
+          }
+          coverImageUrl = await upload.saveImage(
+            coverImage.buffer,
+            coverImage.filename,
+            existingProduct.coverImageUrl,
+          );
+        } else if (fields.coverImage === "") {
+          coverImageUrl = null;
+          await upload.removeAfterCommit(existingProduct.coverImageUrl);
+        }
+        if (coverImage !== null || fields.coverImage !== undefined) {
+          updateData.coverImageUrl = coverImageUrl;
+        }
+
+        let filePath = existingProduct.filePath;
+        if (productFile) {
+          filePath = await upload.saveFile(
+            productFile.buffer,
+            productFile.filename,
+            existingProduct.filePath,
+          );
+        }
+        if (productFile !== null || fields.productFile !== undefined) {
+          updateData.filePath = filePath;
+        }
+
+        const product = await prisma.product.update({
+          where: { id },
+          data: updateData,
         });
 
         return toProductResponse(product);
-      }
-      throw error;
-    }
-  });
-
-  server.put("/api/products/:id", async (request, reply) => {
-    const session = await requireAuth(request, reply);
-    if (!session?.user) return;
-
-    const { id } = request.params as { id: string };
-
-    const existingProduct = await prisma.product.findUnique({
-      where: { id },
-    });
-
-    if (!existingProduct) {
-      return reply.status(404).send({ error: "Product not found" });
-    }
-
-    if (existingProduct.creatorId !== session.user.id) {
-      return reply.status(403).send({ error: "Forbidden" });
-    }
-
-    const multipartData = await parseMultipartData(request);
-    if (!multipartData) {
-      return reply.status(400).send({ error: "Invalid request format" });
-    }
-
-    const { fields, coverImage, productFile } = multipartData;
-
-    const title = fields.title;
-    const description = fields.description;
-    const priceStr = fields.price;
-    const slug = fields.slug;
-    const previewContent = fields.previewContent;
-
-    const updateData: {
-      title?: string;
-      description?: string;
-      price?: number;
-      slug?: string;
-      previewContent?: string | null;
-      coverImageUrl?: string | null;
-      filePath?: string;
-    } = {};
-
-    if (title !== undefined) updateData.title = title;
-    if (description !== undefined) updateData.description = description;
-    if (priceStr !== undefined) {
-      const price = Math.round(Number.parseFloat(priceStr) * 100);
-      if (Number.isNaN(price) || price < 0) {
-        return reply.status(400).send({ error: "Invalid price" });
-      }
-      updateData.price = price;
-    }
-    if (previewContent !== undefined) updateData.previewContent = previewContent || null;
-
-    if (slug !== undefined && slug !== existingProduct.slug) {
-      const existingWithSlug = await prisma.product.findUnique({
-        where: { slug },
       });
-      if (existingWithSlug) {
-        return reply.status(400).send({ error: "Slug already exists" });
-      }
-      updateData.slug = slug;
-    }
-
-    let coverImageUrl: string | null = existingProduct.coverImageUrl;
-    if (coverImage) {
-      const validationError = validateImageFile(coverImage.mimetype, coverImage.filename);
-      if (validationError) {
-        return reply.status(400).send({ error: validationError });
-      }
-      coverImageUrl = await saveImage(coverImage.buffer, coverImage.filename);
-    } else if (fields.coverImage === "") {
-      coverImageUrl = null;
-    }
-    if (coverImage !== null || fields.coverImage !== undefined) {
-      updateData.coverImageUrl = coverImageUrl;
-    }
-
-    let filePath = existingProduct.filePath;
-    if (productFile) {
-      const fileValidationError = validateProductFile(productFile.filename);
-      if (fileValidationError) {
-        return reply.status(400).send({ error: fileValidationError });
-      }
-      filePath = await saveFile(productFile.buffer, productFile.filename);
-    }
-    if (productFile !== null || fields.productFile !== undefined) {
-      updateData.filePath = filePath;
-    }
-
-    const product = await prisma.product.update({
-      where: { id },
-      data: updateData,
-    });
-
-    return toProductResponse(product);
-  });
+    },
+  );
 
   server.patch("/api/products/:id/publish", async (request, reply) => {
     const session = await requireAuth(request, reply);
@@ -518,28 +531,26 @@ export async function productRoutes(server: FastifyInstance): Promise<void> {
     const session = await requireAuth(request, reply);
     if (!session?.user) return;
 
-    const { id } = request.params as { id: string };
+    return withUpload(session.user.id, async (upload) => {
+      const { id } = request.params as { id: string };
 
-    const product = await prisma.product.findUnique({
-      where: { id },
+      const product = await prisma.product.findUnique({
+        where: { id },
+      });
+
+      if (!product) {
+        return reply.status(404).send({ error: "Product not found" });
+      }
+
+      if (product.creatorId !== session.user.id) {
+        return reply.status(403).send({ error: "Forbidden" });
+      }
+
+      await upload.removeAfterCommit(product.filePath);
+      await upload.removeAfterCommit(product.coverImageUrl);
+      await prisma.product.delete({ where: { id } });
+
+      return reply.status(204).send();
     });
-
-    if (!product) {
-      return reply.status(404).send({ error: "Product not found" });
-    }
-
-    if (product.creatorId !== session.user.id) {
-      return reply.status(403).send({ error: "Forbidden" });
-    }
-
-    safeDeletePath(product.filePath, "product file");
-    if (product.coverImageUrl) {
-      const imagePath = join(process.cwd(), product.coverImageUrl.replace(/^\//, ""));
-      safeDeletePath(imagePath, "cover image");
-    }
-
-    await prisma.product.delete({ where: { id } });
-
-    return reply.status(204).send();
   });
 }

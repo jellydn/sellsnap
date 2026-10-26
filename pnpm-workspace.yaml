@@ -2,6 +2,9 @@ packages:
   - apps/*
   - packages/*
 
+overrides:
+  '@fastify/multipart>@fastify/busboy': ^3.2.4
+
 onlyBuiltDependencies:
   - '@prisma/client'
   - '@prisma/engines'
