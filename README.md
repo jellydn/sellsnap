@@ -144,9 +144,10 @@ SellSnap handles payments and file downloads.
   already in progress.
 - Apply database migrations before deploying the updated server. The download-token migration
   also caps existing links at 2 hours from purchase creation.
-- Download binding uses the server's socket IP, not untrusted forwarding headers. If deployed
-  behind a reverse proxy, configure Fastify's `trustProxy` for that proxy's specific addresses
-  before relying on per-buyer IP binding. Do not trust forwarding headers from arbitrary clients.
+- Download binding uses the server's socket IP by default. Behind a reverse proxy, set
+  `TRUSTED_PROXIES` to a comma-separated list of that proxy's IP addresses or CIDRs. Only those
+  proxies can supply the buyer IP through forwarding headers. Leave it empty for direct traffic;
+  never trust forwarding headers from arbitrary clients.
 - Download attempts log a token fingerprint, IP address, and response status, not the bearer token.
   Configure log access and retention for this security data, and redact download URLs in proxy logs.
 - Stripe webhooks verify payment before granting access.

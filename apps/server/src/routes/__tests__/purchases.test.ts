@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import rateLimit from "@fastify/rate-limit";
 import type { Prisma } from "@prisma/client";
-import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
-import type Stripe from "stripe";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import Stripe from "stripe";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../lib/email", () => ({ sendEmail: vi.fn() }));
@@ -28,6 +28,7 @@ vi.mock("../../lib/prisma", async () => {
 import { sendEmail } from "../../lib/email";
 import { prisma } from "../../lib/prisma";
 import { stripe } from "../../lib/stripe";
+import { createServer } from "../../server";
 import { purchaseRoutes } from "../purchases";
 import { webhookRoutes } from "../webhooks";
 
@@ -62,12 +63,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("download token security", () =>
   beforeEach(async () => {
     await server?.close();
     logs = "";
-    server = Fastify({
-      logger: {
-        stream: {
-          write: (line: string) => {
-            logs += line;
-          },
+    server = createServer({
+      stream: {
+        write: (line: string) => {
+          logs += line;
         },
       },
     });
@@ -101,7 +100,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("download token security", () =>
 
   it("issues a two-hour link through the webhook and emails the download policy", async () => {
     const sessionId = randomUUID();
-    vi.mocked(stripe.webhooks.constructEvent).mockReturnValue({
+    const verifier = new Stripe("sk_test_download_security");
+    vi.mocked(stripe.webhooks.constructEvent).mockImplementation(
+      verifier.webhooks.constructEvent.bind(verifier.webhooks),
+    );
+    const payload = JSON.stringify({
       type: "checkout.session.completed",
       data: {
         object: {
@@ -112,9 +115,25 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("download token security", () =>
           amount_total: 500,
         },
       },
-    } as unknown as Stripe.Event);
+    });
     const before = Date.now();
-    const response = await server.inject({ method: "POST", url: "/api/webhooks/stripe" });
+    const headers = {
+      "content-type": "application/json",
+      "stripe-signature": verifier.webhooks.generateTestHeaderString({
+        payload,
+        secret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+      }),
+    };
+    const url = "/api/webhooks/stripe";
+    expect(
+      (await server.inject({ method: "POST", url, headers, payload: `${payload} ` })).statusCode,
+    ).toBe(400);
+    expect(
+      (await server.inject({ method: "POST", url, headers, payload: " ".repeat(1_048_577) }))
+        .statusCode,
+    ).toBe(413);
+    expect(await prisma.purchase.findFirst({ where: { stripeSessionId: sessionId } })).toBeNull();
+    const response = await server.inject({ method: "POST", url, headers, payload });
     expect(response.statusCode).toBe(200);
     const purchase = await prisma.purchase.findFirstOrThrow({
       where: { stripeSessionId: sessionId },
@@ -138,7 +157,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("download token security", () =>
       expect(response.headers["cache-control"]).toBe("no-store");
       expect(response.headers["referrer-policy"]).toBe("no-referrer");
     }
-    const otherServer = Fastify();
+    const otherServer = createServer({ level: "silent" });
     await otherServer.register(purchaseRoutes);
     try {
       const response = await otherServer.inject({ url, remoteAddress: "192.0.2.1" });
@@ -260,5 +279,22 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("download token security", () =>
       ...Array(8).fill(429),
     ]);
     expect(attempts.every((entry) => entry.tokenFingerprint && entry.ip)).toBe(true);
+  });
+
+  it("fails closed without exposing tokens or database errors in responses or logs", async () => {
+    const purchase = await createPurchase();
+    const lookup = prisma.purchase.findUnique;
+    prisma.purchase.findUnique = () => {
+      throw new Error(`Database query failed for ${purchase.downloadToken}`);
+    };
+    try {
+      const response = await server.inject(`/api/download/${purchase.downloadToken}`);
+      expect(response.statusCode).toBe(500);
+      expect(response.json()).toEqual({ error: "Internal server error" });
+      expect(logs).not.toContain(purchase.downloadToken);
+      expect(logs).not.toContain("Database query failed");
+    } finally {
+      prisma.purchase.findUnique = lookup;
+    }
   });
 });

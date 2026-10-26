@@ -5,7 +5,6 @@ import helmet from "@fastify/helmet";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import { logger } from "@sellsnap/logger";
-import Fastify from "fastify";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,12 +19,11 @@ import { productRoutes } from "./routes/products";
 import { profileRoutes } from "./routes/profile";
 import { purchaseRoutes } from "./routes/purchases";
 import { webhookRoutes } from "./routes/webhooks";
+import { createServer } from "./server";
 
 ensureUploadDirs();
 
-const server = Fastify({
-  logger: true,
-});
+const server = createServer();
 
 async function start() {
   await server.register(helmet, {

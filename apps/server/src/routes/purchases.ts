@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
 import { extname } from "node:path";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyError, FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../lib/auth";
-import { PURCHASE_STATUS } from "../lib/constants";
+import { MAX_DOWNLOAD_ATTEMPTS, PURCHASE_STATUS } from "../lib/constants";
 import { prisma } from "../lib/prisma";
 
 function sanitizeFilename(name: string): string {
@@ -11,6 +11,15 @@ function sanitizeFilename(name: string): string {
 }
 
 export async function purchaseRoutes(server: FastifyInstance): Promise<void> {
+  server.setErrorHandler<FastifyError>((error, request, reply) => {
+    if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500) {
+      return reply.status(error.statusCode).send({ error: "Request rejected" });
+    }
+    // Database error messages can contain query arguments, including the bearer token.
+    request.log.error({ errorType: error.name }, "Purchase request failed");
+    return reply.status(500).send({ error: "Internal server error" });
+  });
+
   server.get("/api/purchases/by-session/:sessionId", async (request, reply) => {
     const session = await getSessionFromRequest(request);
     if (!session?.user) {
@@ -68,17 +77,6 @@ export async function purchaseRoutes(server: FastifyInstance): Promise<void> {
   server.get(
     "/api/download/:token",
     {
-      childLoggerFactory(logger, bindings, options) {
-        return logger.child(bindings, {
-          ...options,
-          serializers: {
-            ...options.serializers,
-            req(request: FastifyRequest) {
-              return { method: request.method, url: "/api/download/[REDACTED]", ip: request.ip };
-            },
-          },
-        });
-      },
       onRequest: async (request, reply) => {
         reply.header("Cache-Control", "no-store");
         reply.header("Referrer-Policy", "no-referrer");
@@ -130,7 +128,7 @@ export async function purchaseRoutes(server: FastifyInstance): Promise<void> {
         return reply.status(403).send({ error: "Download link is bound to another IP address" });
       }
 
-      if (purchase.downloadAttempts >= 3) {
+      if (purchase.downloadAttempts >= MAX_DOWNLOAD_ATTEMPTS) {
         return reply.status(429).send({ error: "Download limit reached" });
       }
 
@@ -145,7 +143,7 @@ export async function purchaseRoutes(server: FastifyInstance): Promise<void> {
           status: PURCHASE_STATUS.COMPLETED,
           downloadExpiresAt: { gt: new Date() },
           downloadRevokedAt: null,
-          downloadAttempts: { lt: 3 },
+          downloadAttempts: { lt: MAX_DOWNLOAD_ATTEMPTS },
           OR: [{ downloadIp: null }, { downloadIp: request.ip }],
         },
         data: {
