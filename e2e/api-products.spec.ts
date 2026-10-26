@@ -3,6 +3,7 @@ import {
 	cleanupTestProducts,
 	createTestProduct,
 	deleteTestProduct,
+	postTestProduct,
 	signUpUser,
 } from "./helpers";
 
@@ -35,7 +36,7 @@ test.describe("API Products", () => {
 		const session = await signUpUser(request);
 		const timestamp = Date.now();
 
-		const response = await request.post("/api/products", {
+		const response = await postTestProduct(request, {
 			headers: {
 				cookie: session.cookie,
 			},
@@ -66,9 +67,7 @@ test.describe("API Products", () => {
 		await deleteTestProduct(request, session, body.id);
 	});
 
-	test("creates product and returns it in products list", async ({
-		request,
-	}) => {
+	test("creates product and returns it in products list", async ({ request }) => {
 		const session = await signUpUser(request);
 		const product = await createTestProduct(request, session, {
 			title: "List Test Product",
@@ -166,14 +165,11 @@ test.describe("API Products", () => {
 
 		expect(product.published).toBe(false);
 
-		const publishResponse = await request.patch(
-			`/api/products/${product.id}/publish`,
-			{
-				headers: {
-					cookie: session.cookie,
-				},
+		const publishResponse = await request.patch(`/api/products/${product.id}/publish`, {
+			headers: {
+				cookie: session.cookie,
 			},
-		);
+		});
 
 		expect(publishResponse.ok()).toBeTruthy();
 
@@ -253,12 +249,10 @@ test.describe("API Products", () => {
 		await cleanupTestProducts(request, session, productIds);
 	});
 
-	test("returns 400 for missing required fields when creating product", async ({
-		request,
-	}) => {
+	test("returns 400 for missing required fields when creating product", async ({ request }) => {
 		const session = await signUpUser(request);
 
-		const response = await request.post("/api/products", {
+		const response = await postTestProduct(request, {
 			headers: {
 				cookie: session.cookie,
 			},
@@ -275,7 +269,7 @@ test.describe("API Products", () => {
 	test("returns 400 for invalid price", async ({ request }) => {
 		const session = await signUpUser(request);
 
-		const response = await request.post("/api/products", {
+		const response = await postTestProduct(request, {
 			headers: {
 				cookie: session.cookie,
 			},
