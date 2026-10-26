@@ -1,23 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { logger } from "@sellsnap/logger";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import type Stripe from "stripe";
-import { PURCHASE_STATUS } from "../lib/constants";
+import { DOWNLOAD_EXPIRY_HOURS, MAX_DOWNLOAD_ATTEMPTS, PURCHASE_STATUS } from "../lib/constants";
 import { sendEmail } from "../lib/email";
 import { prisma } from "../lib/prisma";
 import { stripe } from "../lib/stripe";
 
-async function parseRawBody(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
-  const rawParts: Buffer[] = [];
-  for await (const chunk of request.raw) {
-    rawParts.push(chunk);
-  }
-  (request as FastifyRequest & { rawBody: string }).rawBody =
-    Buffer.concat(rawParts).toString("utf-8");
-}
-
 export async function webhookRoutes(server: FastifyInstance): Promise<void> {
-  server.addHook("preParsing", parseRawBody);
+  // Preserve the signed bytes while letting Fastify enforce its request body limit.
+  server.addContentTypeParser("application/json", { parseAs: "string" }, (_request, body, done) => {
+    done(null, body);
+  });
 
   server.post("/api/webhooks/stripe", async (request, reply) => {
     const sig = request.headers["stripe-signature"] as string;
@@ -30,8 +24,7 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
     let event: Stripe.Event;
 
     try {
-      const rawBody = (request as FastifyRequest & { rawBody: string }).rawBody;
-      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+      event = stripe.webhooks.constructEvent(request.body as string, sig, webhookSecret);
     } catch (err) {
       logger.error("Webhook signature verification failed:", err);
       return reply.status(400).send({ error: "Webhook signature verification failed" });
@@ -65,7 +58,7 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
       }
 
       const downloadToken = randomUUID();
-      const downloadExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const downloadExpiresAt = new Date(Date.now() + DOWNLOAD_EXPIRY_HOURS * 60 * 60 * 1000);
 
       const stripePaymentIntentId =
         typeof session.payment_intent === "string"
@@ -92,7 +85,7 @@ export async function webhookRoutes(server: FastifyInstance): Promise<void> {
 
 Product: ${product.title}
 Download Link: ${downloadLink}
-This link will expire in 24 hours.
+This link will expire in ${DOWNLOAD_EXPIRY_HOURS} hours and allows up to ${MAX_DOWNLOAD_ATTEMPTS} downloads from the first IP address that uses it.
 
 If you have any questions, please contact the seller.`;
 

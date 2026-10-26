@@ -12,3 +12,6 @@ export const PURCHASE_STATUS = {
 } as const;
 
 export type PurchaseStatus = (typeof PURCHASE_STATUS)[keyof typeof PURCHASE_STATUS];
+
+export const MAX_DOWNLOAD_ATTEMPTS = 3;
+export const DOWNLOAD_EXPIRY_HOURS = 2;

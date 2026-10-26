@@ -41,7 +41,7 @@ Browser → React SPA → Fastify API → Prisma ORM → PostgreSQL
 - **Shareable product pages** — `/p/:slug` with buy button
 - **Creator profiles** — `/:creatorSlug` listing all published products
 - **Stripe payments** — hosted checkout with webhook confirmation
-- **Secure file delivery** — signed download tokens with 24h expiration
+- **Secure file delivery** — IP-bound download tokens with 2-hour expiration and a 3-download limit
 - **Basic analytics** — views, purchases, revenue per product
 
 ## 🧱 Tech Stack
@@ -111,6 +111,12 @@ just prisma-migrate <name>   # Create and run migration
 just prisma-push              # Push schema to database
 ```
 
+Download security integration tests use a separate PostgreSQL database. Set
+`TEST_DATABASE_URL` to that disposable database, prepare its schema with
+`DATABASE_URL="$TEST_DATABASE_URL" pnpm -F db exec prisma db push --skip-generate`, then run
+`pnpm -F server test`. These tests are skipped without `TEST_DATABASE_URL`; CI runs them with
+its own PostgreSQL service.
+
 ## 🔧 Environment Variables
 
 | Variable | Required | Description |
@@ -129,7 +135,21 @@ SellSnap handles payments and file downloads.
 - Always set a strong `BETTER_AUTH_SECRET`.
 - Always use HTTPS in production.
 - Keep Stripe webhook secrets secure.
-- File download tokens expire after 24 hours.
+- File download tokens expire after 2 hours and allow at most 3 download starts. Interrupted
+  transfers count toward this limit. The first download binds the token to that IP address;
+  changing networks will block later downloads. IP binding limits sharing but does not verify
+  the identity of the first recipient or prevent sharing behind the same public IP.
+- Sellers can revoke a purchase's download token with an authenticated
+  `PATCH /api/purchases/:id/revoke-download` request. Revocation blocks new downloads, not transfers
+  already in progress.
+- Apply database migrations before deploying the updated server. The download-token migration
+  also caps existing links at 2 hours from purchase creation.
+- Download binding uses the server's socket IP by default. Behind a reverse proxy, set
+  `TRUSTED_PROXIES` to a comma-separated list of that proxy's IP addresses or CIDRs. Only those
+  proxies can supply the buyer IP through forwarding headers. Leave it empty for direct traffic;
+  never trust forwarding headers from arbitrary clients.
+- Download attempts log a token fingerprint, IP address, and response status, not the bearer token.
+  Configure log access and retention for this security data, and redact download URLs in proxy logs.
 - Stripe webhooks verify payment before granting access.
 
 ## 📦 Project Structure
