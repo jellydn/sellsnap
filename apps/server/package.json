@@ -37,7 +37,7 @@
     "@types/node": "^25.3.3",
     "prisma": "^6.19.2",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
+    "typescript": "^7.0.0",
     "vitest": "^4.0.18"
   }
 }
